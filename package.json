@@ -1,0 +1,68 @@
+{
+  "name": "hono-utils",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "prepare": "husky",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "coverage": "vitest --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:check": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run format && npm run lint && npm run test && npm run build"
+  },
+  "pre-commit": [
+    "lint"
+  ],
+  "author": "Roman Jankowski",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Em3ODMe/hono-utils.git"
+  },
+  "homepage": "https://github.com/Em3ODMe/hono-utils#readme",
+  "bugs": {
+    "url": "https://github.com/Em3ODMe/hono-utils/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "description": "Hono Utils",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260124.0",
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^25.0.10",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.0.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.8.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18",
+    "zod": "4.3.6"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "^3.0.6",
+    "hierarchical-area-logger": "^0.2.4",
+    "hono": "^4.10.3",
+    "ua-parser-js": "^2.0.8"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "hono",
+    "utils",
+    "typescript",
+    "nodejs"
+  ]
+}
