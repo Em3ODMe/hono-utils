@@ -37,21 +37,31 @@ import { QueueHandler } from 'hono-utils';
 import { pbkdf2, sha } from 'hono-utils';
 ```
 
-## Exports Documentation
+### Router
+
+```ts
+import { onError, onNotFound } from 'hono-utils';
+```
+
+## Detailed Documentation
 
 - Crypto
-  - [src/crypto/pbkdf2.md](src/crypto/pbkdf2.md)
-  - [src/crypto/sha.md](src/crypto/sha.md)
+  - [pbkdf2](docs/crypto/pbkdf2.md)
+  - [sha](docs/crypto/sha.md)
 
 - Middleware
-  - [src/middleware/clientInfo.md](src/middleware/clientInfo.md)
-  - [src/middleware/i18n.md](src/middleware/i18n.md)
-  - [src/middleware/isBot.md](src/middleware/isBot.md)
-  - [src/middleware/logger.md](src/middleware/logger.md)
-  - [src/middleware/queue.md](src/middleware/queue.md)
-  - [src/middleware/response.md](src/middleware/response.md)
-  - [src/middleware/validator.md](src/middleware/validator.md)
-  - [src/middleware/withLogger.md](src/middleware/withLogger.md)
+  - [clientInfo](docs/middleware/clientInfo.md)
+  - [i18n](docs/middleware/i18n.md)
+  - [isBot](docs/middleware/isBot.md)
+  - [logger](docs/middleware/logger.md)
+  - [queue](docs/middleware/queue.md)
+  - [response](docs/middleware/response.md)
+  - [validator](docs/middleware/validator.md)
+  - [withLogger](docs/middleware/withLogger.md)
 
 - Queue
-  - [src/queue/QueueHandler.md](src/queue/QueueHandler.md)
+  - [QueueHandler](docs/queue/QueueHandler.md)
+
+- Router
+  - [onError](docs/router/onError.md)
+  - [onNotFound](docs/router/onNotFound.md)

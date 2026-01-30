@@ -29,7 +29,6 @@ app.use(
   '*',
   logger({
     service: 'api-gateway',
-    env: 'production',
   })
 );
 ```

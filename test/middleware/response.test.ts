@@ -75,7 +75,6 @@ describe(response.name, () => {
         data: {
           test: 'test',
         },
-        eventId: '123',
       });
     });
   });
