@@ -18,8 +18,7 @@ const setResponseHandlers = (c: Context) => {
   return {
     raw: <T extends { status?: ContentfulStatusCode }>(data: T) => {
       const { status, ...rest } = data;
-      const content = { ...rest };
-      return c.json(content, status || (200 as ContentfulStatusCode));
+      return c.json(rest, status || (200 as ContentfulStatusCode));
     },
     success: <T extends object>(
       message: string,
@@ -30,23 +29,13 @@ const setResponseHandlers = (c: Context) => {
         (status as ContentfulStatusCode) || (method === 'POST' ? 201 : 200);
 
       if (data) {
-        const content = { message, data } as {
-          message: string;
-          data: T;
-        };
-        return c.json(content, statusCode);
+        return c.json({ message, data }, statusCode);
       }
-      const content = { message } as {
-        message: string;
-      };
-      return c.json(content, statusCode);
+      return c.json({ message }, statusCode);
     },
     error: (message: string, status: ClientErrorStatusCode) => {
-      const content = { message } as {
-        message: string;
-      };
       throw new HTTPException(status, {
-        message: content.message,
+        message,
       });
     },
     websocket: (socket: WebSocket) => {
