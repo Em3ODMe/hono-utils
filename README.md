@@ -58,6 +58,7 @@ import { onError, onNotFound } from 'hono-utils';
   - [response](docs/middleware/response.md)
   - [validator](docs/middleware/validator.md)
   - [withLogger](docs/middleware/withLogger.md)
+  - [hydrateVariable](docs/middleware/hydrateVariable.md)
 
 - Queue
   - [QueueHandler](docs/queue/QueueHandler.md)
