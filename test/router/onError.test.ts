@@ -4,14 +4,21 @@ import { HTTPException } from 'hono/http-exception';
 import { onError } from '@/router/onError';
 import { defaultMessageMap } from '@/router/constants';
 
-type Env = {
-  Variables: {
-    logger: {
-      getArea: () => {
-        error: Mock;
-      };
+type Variables = {
+  logger: {
+    getArea: () => {
+      error: Mock;
     };
   };
+};
+
+type Bindings = {
+  noop: unknown;
+};
+
+type Env = {
+  Variables: Variables;
+  Bindings: Bindings;
 };
 
 describe(onError.name, () => {
@@ -23,43 +30,13 @@ describe(onError.name, () => {
     }),
   };
 
-  describe('when logger is set', () => {
+  describe('when parseError is not provided', () => {
     beforeEach(() => {
       app = new Hono<Env>();
 
-      app.use('*', async (c, next) => {
-        c.set('logger', mockLogger);
-        await next();
-      });
-
-      app.onError(onError);
+      app.onError(onError());
 
       vi.clearAllMocks();
-    });
-    it('should return 500 and the error message for standard Errors', async () => {
-      app.get('/fail', () => {
-        throw new Error('Standard failure');
-      });
-
-      const res = await app.request('/fail');
-
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({ message: 'Standard failure' });
-      expect(mockErrorFn).toHaveBeenCalledWith(
-        'Standard failure',
-        expect.any(Error)
-      );
-    });
-
-    it('should return 500 when a generic object with a status property is thrown', async () => {
-      app.get('/forbidden', () => {
-        throw new Error('Access Denied', { cause: { status: 403 } });
-      });
-
-      const res = await app.request('/forbidden');
-
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({ message: 'Access Denied' });
     });
     it('should return the specific status code for HTTPException', async () => {
       app.get('/unauthorized', () => {
@@ -74,40 +51,21 @@ describe(onError.name, () => {
       expect(await res.json()).toEqual({
         message: 'Custom unauthorized message',
       });
-      expect(mockErrorFn).toHaveBeenCalled();
-    });
-  });
-
-  describe('when logger is not set', () => {
-    beforeEach(() => {
-      app = new Hono<Env>();
-
-      app.onError(onError);
-
-      vi.clearAllMocks();
-    });
-    it('should return the specific status code for HTTPException', async () => {
-      app.get('/unauthorized', () => {
-        throw new HTTPException(401, {
-          message: 'Custom unauthorized message',
-        });
-      });
-
-      const res = await app.request('/unauthorized');
-
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({
-        message: defaultMessageMap.internalError,
-      });
       expect(mockErrorFn).not.toHaveBeenCalled();
     });
   });
 
-  describe('Internal Handler Failures', () => {
+  describe('when parseError is provided', () => {
     beforeEach(() => {
       app = new Hono<Env>();
 
-      app.onError(onError);
+      app.onError(
+        onError<Bindings, Variables>(async (err, _env, get) => {
+          const logger = get('logger');
+          logger.getArea().error(err);
+          return err.message;
+        })
+      );
 
       app.use('*', async (c, next) => {
         c.set('logger', mockLogger);
@@ -139,6 +97,27 @@ describe(onError.name, () => {
         message: defaultMessageMap.internalError,
       });
       expect(consoleSpy).toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should return correct error message when parseError is provided', async () => {
+      app.get('/emergency', () => {
+        throw new Error('Initial error');
+      });
+
+      // Spy on console.error to keep test logs clean
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+        /* empty */
+      });
+
+      const res = await app.request('/emergency');
+
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({
+        message: 'Initial error',
+      });
+      expect(consoleSpy).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });

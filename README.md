@@ -2,7 +2,7 @@
 
 Hono Utils - Utilities for Hono framework
 
-A collection of helpers to simplify building Hono-based applications, including crypto helpers, middleware utilities, and queue integration.
+A collection of helpers to simplify building Hono-based applications, including crypto helpers, middleware utilities, queue integration and RPC client.
 
 ## Installation
 
@@ -37,6 +37,12 @@ import { QueueHandler } from 'hono-utils';
 import { pbkdf2, sha } from 'hono-utils';
 ```
 
+### Client
+
+```ts
+import { createTypedClient } from 'hono-utils';
+```
+
 ### Router
 
 ```ts
@@ -44,6 +50,9 @@ import { onError, onNotFound } from 'hono-utils';
 ```
 
 ## Detailed Documentation
+
+- Client
+  - [createTypedClient](docs/client/createTypedClient.md)
 
 - Crypto
   - [pbkdf2](docs/crypto/pbkdf2.md)

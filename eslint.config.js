@@ -27,6 +27,7 @@ export default [
         Request: 'readonly',
         WebSocketPair: 'readonly',
         setTimeout: 'readonly',
+        fetch: 'readonly',
       },
     },
     plugins: {

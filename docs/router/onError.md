@@ -1,75 +1,108 @@
+Based on the code snippet provided, I have updated the documentation to reflect that `onError` is now a **factory function** that supports a custom `parseError` callback and no longer relies on a specific `logger` variable in the context.
+
+---
+
 # `onError` Global Error Handler
 
-The `onError` function is a centralized error-handling middleware for **Hono** applications. It ensures that every unhandled exception is logged through a hierarchical logger and returned to the client as a consistent JSON response.
+The `onError` function is a centralized error-handling factory for **Hono** applications. It provides a standardized way to catch exceptions, optionally transform error messages, and return consistent JSON responses.
 
 ---
 
 ## Overview
 
-In a Hono application, the `onError` handler intercepts thrown `Error` objects or `HTTPException` instances. It bridges the gap between internal logging requirements and external API error reporting.
+Unlike a static handler, `onError` is a higher-order function that allows you to inject custom logic for parsing error messages. It leverages Hono's `env` and `get` utilities to provide context-aware error formatting.
 
 ---
 
 ## Behavior
 
-The handler follows a specific execution flow to ensure no error goes unrecorded:
+The handler follows this execution flow:
 
-1. **Hierarchical Logging:** It retrieves the `logger` from the Hono context (`c.var.logger`) and targets the `error` area. It logs both the error message and the full stack trace.
-2. **Status Code Resolution:**
+1. **Status Code Resolution:**
 
-- If the error is an `HTTPException` (or contains a `status` property), that status is used.
-- Otherwise, it defaults to a **500 Internal Server Error**.
+- Checks if the error object contains a `status` property (common in `HTTPException`).
+- Defaults to **500 Internal Server Error** if no status is found.
 
-3. **JSON Response:** It returns a standardized JSON payload containing the error message.
-4. **Panic Recovery:** If the logging process itself fails (e.g., the logger is undefined), the handler catches its own exception, logs it to the standard `console.error`, and returns a generic internal error message defined in constants.
+2. **Message Parsing:**
+
+- If a `parseError` function was provided during initialization, it is called with the error, the environment (`env`), and the context getter (`get`).
+- If no parser is provided or it returns null/undefined, it falls back to the native `err.message`.
+
+3. **JSON Response:** Returns a JSON payload: `{ "message": "..." }` with the resolved status code.
+4. **Panic Recovery:** If the parsing logic or response generation throws an unexpected error, the handler:
+
+- Logs the original error and the secondary failure to `console.error`.
+- Returns a generic error message defined in `defaultMessageMap.internalError`.
 
 ---
 
 ## Usage
 
-To use this handler, register it with your Hono instance. Ensure that a logger middleware has already been used to populate `c.var.logger`.
+Since `onError` is a factory, you must invoke it when registering it with your Hono instance.
+
+### Basic Usage
 
 ```typescript
 import { Hono } from 'hono';
-import { onError, logger } from 'hono-utils';
+import { onError } from './error-handler';
 
 const app = new Hono();
 
-// 1. Logger must be initialized first
-app.use(
-  '*',
-  logger({
-    service: 'api-gateway',
+// Register the handler
+app.onError(onError());
+```
+
+### With Custom Parsing Logic
+
+You can use the `parseError` callback to sanitize messages or extract specific details from your database or auth errors.
+
+```typescript
+app.onError(
+  onError(async (err, env, get) => {
+    // Custom logic: e.g., hide database details in production
+    if (env.NODE_ENV === 'production' && err.name === 'ZodError') {
+      return 'Validation failed';
+    }
+    return err.message;
   })
 );
+```
 
-// 2. Register the global error handler
-app.onError(onError);
+---
 
-app.get('/trigger-error', (c) => {
-  throw new Error('Something went wrong!');
-});
+## Type Safety
+
+The factory accepts two generics to ensure type safety when accessing environment variables or context variables within the `parseError` callback:
+
+- **`Bindings`**: The type for `c.env`.
+- **`Variables`**: The type for `c.get()`.
+
+```typescript
+app.onError(
+  onError<MyBindings, MyVariables>(async (err, env, get) => {
+    const version = get('version'); // Type-safe access
+    return `${err.message} (v${version})`;
+  })
+);
 ```
 
 ---
 
 ## Response Structure
 
-The handler guarantees a JSON response regardless of the error type.
+### Standard Error Response
 
-### Successful Error Handling
-
-**Status:** `500` (Default) or `HTTPException.status`
+**Status:** `err.status` or `500`
 
 ```json
 {
-  "message": "The specific error message thrown"
+  "message": "The resolved error message"
 }
 ```
 
 ### Emergency Fallback
 
-If the handler encounters an internal failure, it returns the default internal error message.
+If the handler itself fails, it returns a hardcoded fallback message.
 **Status:** `500`
 
 ```json
@@ -80,5 +113,5 @@ If the handler encounters an internal failure, it returns the default internal e
 
 ---
 
-> [!IMPORTANT]
-> This handler expects `logger` to be present in the Hono `Variables`. Ensure your environment types and logger middleware are correctly configured to avoid the emergency catch block.
+> [!NOTE]
+> This handler uses `console.error` for emergency logging. For production environments, ensure your runtime environment (like Cloudflare Logs or AWS CloudWatch) captures `stdout`/`stderr`.
