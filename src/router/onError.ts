@@ -1,19 +1,18 @@
 import { HTTPException } from 'hono/http-exception';
-import type { ErrorHandler } from 'hono';
+import type { ErrorHandler, Env } from 'hono';
 import { defaultMessageMap } from './constants';
 
 export const onError =
-  <
-    Bindings extends Record<string, unknown>,
-    Variables extends Record<string, unknown>,
-  >(
+  <Environment extends Env>(
     parseError?: (
-      err: Error,
-      env: Bindings,
-      get: <K extends keyof Variables>(key: K) => Variables[K]
+      err: Error | HTTPException,
+      env: Environment['Bindings'],
+      get: <K extends keyof Environment['Variables']>(
+        key: K
+      ) => Environment['Variables'][K]
     ) => Promise<string>
-  ): ErrorHandler =>
-  async (err: Error, { json, env, get }) => {
+  ): ErrorHandler<Environment> =>
+  async (err: Error | HTTPException, { json, env, get }) => {
     try {
       const status =
         'status' in err ? (err.status as HTTPException['status']) : 500;

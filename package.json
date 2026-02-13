@@ -1,6 +1,6 @@
 {
   "name": "hono-utils",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "prepare": "husky",
@@ -49,8 +49,8 @@
     "zod": "4.3.6"
   },
   "dependencies": {
-    "@paralleldrive/cuid2": "^3.0.6",
-    "hierarchical-area-logger": "^0.2.4",
+    "@paralleldrive/cuid2": "^3.3.0",
+    "hierarchical-area-logger": "^0.2.7",
     "hono": "^4.10.3",
     "ua-parser-js": "^2.0.8"
   },

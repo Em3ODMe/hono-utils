@@ -8,11 +8,11 @@ importers:
   .:
     dependencies:
       '@paralleldrive/cuid2':
-        specifier: ^3.0.6
+        specifier: ^3.3.0
         version: 3.3.0
       hierarchical-area-logger:
-        specifier: ^0.2.4
-        version: 0.2.4
+        specifier: ^0.2.7
+        version: 0.2.7
       hono:
         specifier: ^4.10.3
         version: 4.11.5
@@ -1249,10 +1249,10 @@ packages:
       }
     engines: { node: '>=8' }
 
-  hierarchical-area-logger@0.2.4:
+  hierarchical-area-logger@0.2.7:
     resolution:
       {
-        integrity: sha512-N+hv3/M3Ph3FRS1fejzp0Bp1jdpAE8cigf5+oCWDoZK0NQ9QR8arAgjWpNvHf2zhytCKQSXL/61NV0vhfSqdqA==,
+        integrity: sha512-w3zi/WFMNCrOfNmDBNZ7AjEHvugLDDkNoZ1YPSPk+0I5M02LKgCNlGVQZhVGmgaryCttJgt/cDAWQUE+aywtPQ==,
       }
     engines: { node: '>=18.0.0' }
 
@@ -2645,7 +2645,7 @@ snapshots:
 
   has-flag@4.0.0: {}
 
-  hierarchical-area-logger@0.2.4:
+  hierarchical-area-logger@0.2.7:
     dependencies:
       '@paralleldrive/cuid2': 3.3.0
 

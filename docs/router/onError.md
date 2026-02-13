@@ -79,7 +79,7 @@ The factory accepts two generics to ensure type safety when accessing environmen
 
 ```typescript
 app.onError(
-  onError<MyBindings, MyVariables>(async (err, env, get) => {
+  onError<Env>(async (err, env, get) => {
     const version = get('version'); // Type-safe access
     return `${err.message} (v${version})`;
   })

@@ -13,8 +13,6 @@ export type HonoResponseVariables = {
 };
 
 const setResponseHandlers = (c: Context) => {
-  const method = c.req.method;
-
   return {
     raw: <T extends { status?: ContentfulStatusCode }>(data: T) => {
       const { status, ...rest } = data;
@@ -22,15 +20,17 @@ const setResponseHandlers = (c: Context) => {
     },
     success: <T extends object>(
       message: string,
-      data?: T,
+      data: T,
       status?: SuccessStatusCode
     ) => {
       const statusCode: ContentfulStatusCode =
-        (status as ContentfulStatusCode) || (method === 'POST' ? 201 : 200);
+        (status as ContentfulStatusCode) || 200;
 
-      if (data) {
-        return c.json({ message, data }, statusCode);
-      }
+      return c.json({ message, data }, statusCode);
+    },
+    successNoContent: (message: string, status?: SuccessStatusCode) => {
+      const statusCode: ContentfulStatusCode =
+        (status as ContentfulStatusCode) || 200;
       return c.json({ message }, statusCode);
     },
     error: (message: string, status: ClientErrorStatusCode) => {
@@ -62,6 +62,8 @@ export const response = createMiddleware<{
   Variables: HonoResponseVariables & HonoLoggerVariables;
 }>(async (c, next) => {
   c.set('res', setResponseHandlers(c));
-  c.header('x-event-id', c.var.eventId);
+  if (c.var.eventId) {
+    c.header('x-event-id', c.var.eventId);
+  }
   await next();
 });
