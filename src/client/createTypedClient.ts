@@ -21,71 +21,67 @@ export interface CreateTypedClientOptions {
     | Record<string, string>
     | (() => Record<string, string> | Promise<Record<string, string>>);
   fetch?: typeof fetch;
-  callbacks?: TypedClientCallbacks;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const createTypedClient = <TApp extends Hono<any, any, any>>(
-  options: CreateTypedClientOptions
-) => {
-  const client = hc<TApp>(options.url, {
-    headers: options.headers,
-    fetch: options.fetch,
-  });
+export const createTypedClient = <TApp extends Hono<any, any, any>>() => {
+  return (options: CreateTypedClientOptions) =>
+    async <TSuccessData>(
+      fn: (
+        c: ReturnType<typeof hc<TApp>>
+      ) => Promise<ClientResponse<TSuccessData>>,
+      callbacks?: TypedClientCallbacks
+    ): Promise<TSuccessData> => {
+      const client = hc<TApp>(options.url, {
+        headers: options.headers,
+        fetch: options.fetch,
+      });
+      callbacks?.onStart?.();
 
-  const rpcClient = async <TSuccessData>(
-    fn: (
-      c: ReturnType<typeof hc<TApp>>
-    ) => Promise<ClientResponse<TSuccessData>>
-  ): Promise<TSuccessData> => {
-    options.callbacks?.onStart?.();
+      // We keep a reference to headers to use them in the catch block if needed
+      let responseHeaders: Headers = new Headers();
 
-    // We keep a reference to headers to use them in the catch block if needed
-    let responseHeaders: Headers = new Headers();
+      try {
+        // 1. Execute the raw request
+        const response = await fn(client);
+        responseHeaders = response.headers;
 
-    try {
-      // 1. Execute the raw request
-      const response = await fn(client);
-      responseHeaders = response.headers;
+        // 2. Use Hono's native parseResponse
+        // This automatically:
+        // - Checks response.ok (throws DetailedError if false)
+        // - Parses JSON/Text based on Content-Type
+        const data = await parseResponse(response);
 
-      // 2. Use Hono's native parseResponse
-      // This automatically:
-      // - Checks response.ok (throws DetailedError if false)
-      // - Parses JSON/Text based on Content-Type
-      const data = await parseResponse(response);
+        // 3. Handle Success
+        callbacks?.onSuccess?.(data, responseHeaders);
+        return data as TSuccessData;
+      } catch (err) {
+        // 4. Handle Errors
+        const errorBody: ErrorBody = { message: (err as Error).message };
+        let status: ContentfulStatusCode = 500;
 
-      // 3. Handle Success
-      options.callbacks?.onSuccess?.(data, responseHeaders);
-      return data as TSuccessData;
-    } catch (err) {
-      // 4. Handle Errors
-      const errorBody: ErrorBody = { message: (err as Error).message };
-      let status: ContentfulStatusCode = 500;
+        if (err instanceof DetailedError) {
+          const { detail, statusCode } = err as {
+            detail?: TSuccessData;
+            statusCode?: ContentfulStatusCode;
+          };
+          // DetailedError is thrown by parseResponse when !response.ok
+          status = statusCode ?? 500;
 
-      if (err instanceof DetailedError) {
-        const { detail, statusCode } = err as {
-          detail?: TSuccessData;
-          statusCode?: ContentfulStatusCode;
-        };
-        // DetailedError is thrown by parseResponse when !response.ok
-        status = statusCode ?? 500;
-
-        if (!detail) {
-          options.callbacks?.errorHandler?.(500, {
-            message: 'Fetch malformed',
-          });
-          throw new HTTPException(500, { message: 'Fetch malformed' });
+          if (!detail) {
+            callbacks?.errorHandler?.(500, {
+              message: 'Fetch malformed',
+            });
+            throw new HTTPException(500, { message: 'Fetch malformed' });
+          }
         }
+
+        callbacks?.onError?.(errorBody, responseHeaders);
+        callbacks?.errorHandler?.(status, errorBody);
+
+        throw new HTTPException(status, errorBody);
+      } finally {
+        callbacks?.onEnd?.();
       }
-
-      options.callbacks?.onError?.(errorBody, responseHeaders);
-      options.callbacks?.errorHandler?.(status, errorBody);
-
-      throw new HTTPException(status, errorBody);
-    } finally {
-      options.callbacks?.onEnd?.();
-    }
-  };
-
-  return rpcClient;
+    };
 };

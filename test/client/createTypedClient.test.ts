@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { DetailedError, hc, parseResponse } from 'hono/client';
 import type { Hono } from 'hono';
-import {
-  createTypedClient,
-  type CreateTypedClientOptions,
-} from '@/client/createTypedClient';
+import { createTypedClient } from '@/client/createTypedClient';
 
 // Mock 'hono/client' to control parseResponse and spy on hc
 vi.mock('hono/client', async (importOriginal) => {
@@ -27,30 +24,35 @@ describe('createTypedClient', () => {
   const onErrorSpy = vi.fn();
   const onEndSpy = vi.fn();
   const errorHandlerSpy =
-    vi.fn<
-      NonNullable<
-        NonNullable<CreateTypedClientOptions['callbacks']>['errorHandler']
-      >
-    >();
+    vi.fn<(status: number, body?: Record<string, unknown>) => never>();
   const mockFetch = vi.fn();
 
   const defaultOptions = {
     url: 'http://localhost:3000',
     fetch: mockFetch,
-    callbacks: {
-      onStart: onStartSpy,
-      onSuccess: onSuccessSpy,
-      onError: onErrorSpy,
-      onEnd: onEndSpy,
-    },
+  };
+
+  const defaultCallbacks = {
+    onStart: onStartSpy,
+    onSuccess: onSuccessSpy,
+    onError: onErrorSpy,
+    onEnd: onEndSpy,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should initialize the Hono client (hc) with correct options', () => {
-    createTypedClient<MockApp>(defaultOptions);
+  it('should initialize the Hono client (hc) with correct options', async () => {
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
+
+    const mockData = { id: 1 };
+    (parseResponse as Mock).mockResolvedValueOnce(mockData);
+    const requestFn = vi
+      .fn()
+      .mockResolvedValue({ headers: new Headers(), ok: true } as Response);
+
+    await rpc(requestFn, defaultCallbacks);
 
     expect(hc).toHaveBeenCalledWith('http://localhost:3000', {
       headers: undefined,
@@ -59,7 +61,7 @@ describe('createTypedClient', () => {
   });
 
   it('should handle a successful request lifecycle', async () => {
-    const rpc = createTypedClient<MockApp>(defaultOptions);
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
 
     // Mock Data
     const mockData: MockResponse = { id: 1, name: 'Test' };
@@ -74,7 +76,7 @@ describe('createTypedClient', () => {
     const requestFn = vi.fn().mockResolvedValue(mockResObject);
 
     // Execute
-    const result = await rpc(requestFn);
+    const result = await rpc(requestFn, defaultCallbacks);
 
     // Assertions
     expect(onStartSpy).toHaveBeenCalledTimes(1);
@@ -95,20 +97,16 @@ describe('createTypedClient', () => {
   });
 
   it('should delegate to errorHandler if provided', async () => {
-    const rpc = createTypedClient<MockApp>({
-      ...defaultOptions,
-      callbacks: {
-        ...defaultOptions.callbacks,
-        errorHandler: errorHandlerSpy,
-      },
-    });
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
 
     const detailedError = new DetailedError('Forbidden');
     (parseResponse as Mock).mockRejectedValueOnce(detailedError);
     const requestFn = vi.fn().mockResolvedValue({ headers: new Headers() });
 
     // Execute
-    await expect(rpc(requestFn)).rejects.toThrow('Fetch malformed');
+    await expect(
+      rpc(requestFn, { errorHandler: errorHandlerSpy })
+    ).rejects.toThrow('Fetch malformed');
 
     // Verify errorHandler call
     expect(errorHandlerSpy).toHaveBeenCalledWith(500, {
@@ -117,25 +115,29 @@ describe('createTypedClient', () => {
   });
 
   it('should handle "Fetch malformed" when DetailedError has no detail', async () => {
-    const rpc = createTypedClient<MockApp>(defaultOptions);
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
 
     // DetailedError with null/undefined detail
     const malformedError = new DetailedError('Bad', { statusCode: 500 });
     (parseResponse as Mock).mockRejectedValueOnce(malformedError);
     const requestFn = vi.fn().mockResolvedValue({ headers: new Headers() });
 
-    await expect(rpc(requestFn)).rejects.toThrow('Fetch malformed');
+    await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow(
+      'Fetch malformed'
+    );
 
     expect(onErrorSpy).not.toHaveBeenCalled();
   });
 
   it('should handle generic (non-Hono) errors', async () => {
-    const rpc = createTypedClient<MockApp>(defaultOptions);
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
 
     const networkError = new Error('Network Error');
     const requestFn = vi.fn().mockRejectedValueOnce(networkError);
 
-    await expect(rpc(requestFn)).rejects.toThrow('Network Error');
+    await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow(
+      'Network Error'
+    );
 
     expect(onErrorSpy).toHaveBeenCalledWith(
       { message: 'Network Error' },
