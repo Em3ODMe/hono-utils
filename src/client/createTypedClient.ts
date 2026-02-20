@@ -12,7 +12,6 @@ interface TypedClientCallbacks {
   onSuccess?: (parsedData: unknown, headers: Headers) => void;
   onError?: (parsedData: unknown, headers: Headers) => void;
   onEnd?: () => void;
-  errorHandler?: (status: StatusCode | number, body?: ErrorBody) => never;
 }
 
 export interface CreateTypedClientOptions {
@@ -21,6 +20,7 @@ export interface CreateTypedClientOptions {
     | Record<string, string>
     | (() => Record<string, string> | Promise<Record<string, string>>);
   fetch?: typeof fetch;
+  errorHandler?: (status: StatusCode | number, body?: ErrorBody) => never;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,7 +69,7 @@ export const createTypedClient = <TApp extends Hono<any, any, any>>() => {
           status = statusCode ?? 500;
 
           if (!detail) {
-            callbacks?.errorHandler?.(500, {
+            options.errorHandler?.(500, {
               message: 'Fetch malformed',
             });
             throw new HTTPException(500, { message: 'Fetch malformed' });
@@ -77,7 +77,7 @@ export const createTypedClient = <TApp extends Hono<any, any, any>>() => {
         }
 
         callbacks?.onError?.(errorBody, responseHeaders);
-        callbacks?.errorHandler?.(status, errorBody);
+        options.errorHandler?.(status, errorBody);
 
         throw new HTTPException(status, errorBody);
       } finally {

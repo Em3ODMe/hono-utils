@@ -97,16 +97,19 @@ describe('createTypedClient', () => {
   });
 
   it('should delegate to errorHandler if provided', async () => {
-    const rpc = createTypedClient<MockApp>()(defaultOptions);
+    const rpc = createTypedClient<MockApp>()({
+      ...defaultOptions,
+      errorHandler: errorHandlerSpy,
+    });
 
     const detailedError = new DetailedError('Forbidden');
     (parseResponse as Mock).mockRejectedValueOnce(detailedError);
     const requestFn = vi.fn().mockResolvedValue({ headers: new Headers() });
 
     // Execute
-    await expect(
-      rpc(requestFn, { errorHandler: errorHandlerSpy })
-    ).rejects.toThrow('Fetch malformed');
+    await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow(
+      'Fetch malformed'
+    );
 
     // Verify errorHandler call
     expect(errorHandlerSpy).toHaveBeenCalledWith(500, {
