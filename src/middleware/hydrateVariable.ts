@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import { Env } from 'hono';
 
 /**
  * A Hono middleware factory that hydrates a context variable based on environment bindings or other variables.
@@ -16,21 +17,19 @@ import { createMiddleware } from 'hono/factory';
  *   hydrate: (c) => new UserProfile(c.USER_ID)
  * });
  */
-export const hydrateVariable = <
-  Bindings extends Record<string, unknown>,
-  Variables extends Record<string, unknown>,
-  HidratedResult,
->({
+export const hydrateVariable = <Environment extends Env, HidratedResult>({
   variableName,
   hydrate,
 }: {
-  variableName: keyof Variables;
+  variableName: keyof Environment['Variables'];
   hydrate: (
-    c: Bindings & { get: <T>(key: keyof Variables) => T }
+    c: Environment['Bindings'] & {
+      get: <T>(key: keyof Environment['Variables']) => T;
+    }
   ) => HidratedResult;
 }) =>
   createMiddleware<{
-    Bindings: Bindings;
+    Bindings: Environment['Bindings'];
     Variables: Record<string, HidratedResult>;
   }>(async ({ set, env, get }, next) => {
     set(variableName as string, hydrate({ ...env, get }));

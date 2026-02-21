@@ -11,6 +11,11 @@ type Variables = {
   user_id: string;
 };
 
+type Env = {
+  Bindings: Bindings;
+  Variables: Variables;
+};
+
 class DatabaseClient {
   constructor(private dbUrl: string) {}
 
@@ -21,10 +26,10 @@ class DatabaseClient {
 
 describe(hydrateVariable.name, () => {
   it('should hydrate a variable based on environment bindings', async () => {
-    const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+    const app = new Hono<Env>();
     app.use(
       '*',
-      hydrateVariable<Bindings, Variables, DatabaseClient>({
+      hydrateVariable<Env, DatabaseClient>({
         variableName: 'db',
         hydrate: (c) => new DatabaseClient(c.DB_URL),
       })
