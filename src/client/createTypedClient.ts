@@ -7,7 +7,7 @@ import { HTTPException } from 'hono/http-exception';
 
 type ErrorBody = Record<string, unknown>;
 
-interface TypedClientCallbacks {
+export interface TypedClientCallbacks {
   onStart?: () => void;
   onSuccess?: (parsedData: unknown, headers: Headers) => void;
   onError?: (parsedData: unknown, headers: Headers) => void;
