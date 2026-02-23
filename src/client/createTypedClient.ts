@@ -1,5 +1,5 @@
 import { hc } from 'hono/client';
-import { parseResponse, DetailedError } from 'hono/client';
+import { parseResponse } from 'hono/client';
 import type { ClientResponse } from 'hono/client';
 import type { Hono } from 'hono';
 import type { ContentfulStatusCode, StatusCode } from 'hono/utils/http-status';
@@ -57,29 +57,29 @@ export const createTypedClient = <TApp extends Hono<any, any, any>>() => {
         return data as TSuccessData;
       } catch (err) {
         // 4. Handle Errors
-        const errorBody: ErrorBody = { message: (err as Error).message };
         let status: ContentfulStatusCode = 500;
+        const { detail, statusCode } = err as {
+          detail?: TSuccessData;
+          statusCode?: ContentfulStatusCode;
+        };
 
-        if (err instanceof DetailedError) {
-          const { detail, statusCode } = err as {
-            detail?: TSuccessData;
-            statusCode?: ContentfulStatusCode;
-          };
-          // DetailedError is thrown by parseResponse when !response.ok
-          status = statusCode ?? 500;
+        status = statusCode ?? 500;
 
-          if (!detail) {
-            options.errorHandler?.(500, {
-              message: 'Fetch malformed',
-            });
-            throw new HTTPException(500, { message: 'Fetch malformed' });
-          }
+        if (!detail) {
+          options.errorHandler?.(status, {
+            message: 'Fetch malformed',
+          });
+          throw new HTTPException(status, { message: 'Fetch malformed' });
         }
 
-        callbacks?.onError?.(errorBody, responseHeaders);
-        options.errorHandler?.(status, errorBody);
+        const { message } = detail as unknown as {
+          message: string;
+        };
 
-        throw new HTTPException(status, errorBody);
+        options.errorHandler?.(status, { ...detail, status });
+        callbacks?.onError?.(detail, responseHeaders);
+
+        throw new HTTPException(status, { message });
       } finally {
         callbacks?.onEnd?.();
       }

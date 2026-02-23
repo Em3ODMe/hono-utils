@@ -19,7 +19,10 @@ export const onError =
 
       return json(
         {
-          message: !parseError ? err.message : await parseError(err, env, get),
+          message: !parseError
+            ? err.message
+            : ((await parseError(err, env, get)) ??
+              defaultMessageMap.internalError),
         },
         status
       );

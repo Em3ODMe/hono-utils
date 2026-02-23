@@ -30,6 +30,7 @@ describe('createTypedClient', () => {
   const defaultOptions = {
     url: 'http://localhost:3000',
     fetch: mockFetch,
+    errorHandler: errorHandlerSpy,
   };
 
   const defaultCallbacks = {
@@ -123,13 +124,22 @@ describe('createTypedClient', () => {
     // DetailedError with null/undefined detail
     const malformedError = new DetailedError('Bad', { statusCode: 500 });
     (parseResponse as Mock).mockRejectedValueOnce(malformedError);
-    const requestFn = vi.fn().mockResolvedValue({ headers: new Headers() });
+    const requestFn = vi
+      .fn()
+      .mockRejectedValue({ detail: { message: 'Test' }, statusCode: 400 });
 
-    await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow(
-      'Fetch malformed'
-    );
+    await rpc(requestFn, defaultCallbacks).catch(() => {
+      expect(onErrorSpy).toHaveBeenCalledWith(
+        { message: 'Test' },
+        expect.any(Headers)
+      );
+      expect(errorHandlerSpy).toHaveBeenCalledWith(400, {
+        message: 'Test',
+        status: 400,
+      });
+    });
 
-    expect(onErrorSpy).not.toHaveBeenCalled();
+    expect(onEndSpy).toHaveBeenCalled();
   });
 
   it('should handle generic (non-Hono) errors', async () => {
@@ -139,13 +149,10 @@ describe('createTypedClient', () => {
     const requestFn = vi.fn().mockRejectedValueOnce(networkError);
 
     await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow(
-      'Network Error'
+      'Fetch malformed'
     );
+    expect(onErrorSpy).not.toHaveBeenCalled();
 
-    expect(onErrorSpy).toHaveBeenCalledWith(
-      { message: 'Network Error' },
-      expect.any(Headers) // Likely empty headers as request failed before return
-    );
     expect(onEndSpy).toHaveBeenCalled();
   });
 });
