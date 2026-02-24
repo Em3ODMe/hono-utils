@@ -1,6 +1,9 @@
 import { HTTPException } from 'hono/http-exception';
+import { Logger } from 'hierarchical-area-logger';
 import type { IncomingRequestCfPropertiesBotManagementBase } from '@cloudflare/workers-types';
 import { createMiddleware } from 'hono/factory';
+import { MiddlewareWithLoggingCapability } from './types';
+import { HonoLoggerVariables } from './logger';
 
 export type HonoIsBotVariables = {
   isBot: boolean;
@@ -25,16 +28,29 @@ export type HonoIsBotVariables = {
  * app.use('/api/*', isBot({ threshold: 50, allowVerifiedBot: true }));
  * ```
  */
-export const isBot = ({
-  threshold = 49,
-  allowVerifiedBot,
-}: {
+export const isBot: MiddlewareWithLoggingCapability<{
   threshold: number;
   allowVerifiedBot?: boolean;
-}) =>
+}> = (
+  { threshold, allowVerifiedBot, useLogger } = {
+    threshold: 49,
+  }
+) =>
   createMiddleware<{
-    Variables: HonoIsBotVariables;
+    Variables: HonoIsBotVariables & HonoLoggerVariables;
   }>(async (c, next) => {
+    const logger = useLogger
+      ? (
+          c.get('logger') ??
+          new Logger({
+            details: {
+              service: 'dummy',
+            },
+          })
+        ).getArea('middeware:isBot')
+      : undefined;
+
+    logger?.debug('Retrieving bot management data from cloudflare data');
     const botManagement = c.req.raw.cf?.botManagement as
       | IncomingRequestCfPropertiesBotManagementBase
       | undefined;
@@ -52,6 +68,13 @@ export const isBot = ({
     const isVerifiedAllowed = !!(allowVerifiedBot && verifiedBot);
     const isBot = isBotByScore;
 
+    logger?.debug('Setting isBot variable in context', {
+      isBotByScore,
+      isVerifiedAllowed,
+      isBot,
+    });
+
+    logger?.info('isBot variable set');
     c.set('isBot', isBot);
 
     // Block non-verified bots when score is below threshold, or when non-verified

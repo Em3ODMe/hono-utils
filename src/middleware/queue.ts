@@ -1,6 +1,5 @@
 import { createMiddleware } from 'hono/factory';
 import z, { type ZodObject } from 'zod';
-import { Logger } from 'hierarchical-area-logger';
 import type { Queue } from '@cloudflare/workers-types';
 import { QueueHandler } from '../queue/QueueHandler';
 import { HonoLoggerVariables } from './logger';
@@ -58,13 +57,13 @@ export const queue = <
 
     const language = get('language') as unknown as string | undefined;
 
-    const logger = get('logger') as Logger | undefined;
-
     if (!queueEnv) {
       throw new Error(
         `Queue environment variable ${name as string} is not defined`
       );
     }
+
+    const logger = get('logger');
 
     let parentEventId: string | undefined;
 
@@ -72,7 +71,7 @@ export const queue = <
       if (!logger) {
         throw new Error('Logger should be initialized before queue middleware');
       }
-      parentEventId = logger.eventId;
+      parentEventId = logger?.eventId;
     }
 
     const producer = queueHandler.getProducer(queueEnv, {

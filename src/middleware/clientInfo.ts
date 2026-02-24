@@ -5,6 +5,9 @@ import type {
   ContinentCode,
 } from '@cloudflare/workers-types';
 import { SHA } from '../crypto';
+import { MiddlewareWithLoggingCapability } from './types';
+import { Logger } from 'hierarchical-area-logger';
+import { HonoLoggerVariables } from './logger';
 
 type CFData = {
   isEUCountry: boolean;
@@ -66,7 +69,9 @@ export type HonoClientInfoVariables = {
  * ```ts
  * const app = new Hono<{ Variables: HonoClientInfoVariables }>();
  *
- * app.use('*', clientInfo());
+ * app.use('*', clientInfo({
+ *  useLogger: true // for debugging purposes
+ * }));
  *
  * app.get('/me', (c) => {
  *  const client = c.get('client');
@@ -77,19 +82,32 @@ export type HonoClientInfoVariables = {
  * });
  * ```
  */
-export const clientInfo = (config?: {
+export const clientInfo: MiddlewareWithLoggingCapability<{
   hashSecretBinding?: string;
   securityHashString?: (
     content: CFData & UserAgentData & { ip: string }
   ) => string;
-}) =>
+}> = (config) =>
   createMiddleware<{
     Bindings: Record<string, string>;
-    Variables: HonoClientInfoVariables;
-  }>(async ({ env, req, set }, next) => {
+    Variables: HonoClientInfoVariables & HonoLoggerVariables;
+  }>(async ({ env, req, set, get }, next) => {
+    const logger = config?.useLogger
+      ? (
+          get('logger') ??
+          new Logger({
+            details: {
+              service: 'dummy',
+            },
+          })
+        ).getArea('middeware:clientInfo')
+      : undefined;
+
     if (!req.raw.cf) {
       throw new Error('Cloudflare data is not available');
     }
+
+    logger?.debug('Retrieving hash secret from environment');
     const hashSecret = env[config?.hashSecretBinding ?? 'HASH_SECRET'] as
       | string
       | undefined;
@@ -113,6 +131,7 @@ export const clientInfo = (config?: {
       timezone,
     } = req.raw.cf as CFData;
 
+    logger?.debug('Forming cloudflare client data object');
     const cf = {
       latitude,
       longitude,
@@ -128,6 +147,7 @@ export const clientInfo = (config?: {
       timezone,
     };
 
+    logger?.debug('Parsing user agent');
     const userAgent = req.raw.headers.get('user-agent') ?? 'Unknown';
     const parser = new UAParser(userAgent);
     const userAgentParsed = parser.getResult();
@@ -155,11 +175,13 @@ export const clientInfo = (config?: {
       cpu: cpu.architecture ?? 'Unknown',
     };
 
+    logger?.debug('Getting ip address');
     const ip =
       (req.raw.headers.get('CF-Connecting-IP') as string) ?? '127.0.0.1';
 
     const clientContent = { ...cf, ...ua, ip };
 
+    logger?.debug('Setting client data into context');
     set('client', {
       ...clientContent,
       userAgent,
@@ -171,5 +193,6 @@ export const clientInfo = (config?: {
         pepper: hashSecret,
       }),
     });
-    next();
+    logger?.info('Client data variable set');
+    await next();
   });

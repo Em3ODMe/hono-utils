@@ -76,7 +76,9 @@ export const createTypedClient = <TApp extends Hono<any, any, any>>() => {
           message: string;
         };
 
-        options.errorHandler?.(status, { ...detail, status });
+        const eventId = responseHeaders.get('x-event-id') ?? undefined;
+
+        options.errorHandler?.(status, { ...detail, eventId, status });
         callbacks?.onError?.(detail, responseHeaders);
 
         throw new HTTPException(status, { message });
