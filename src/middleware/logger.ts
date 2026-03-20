@@ -36,6 +36,7 @@ export const logger = (details: Details, parentEventIdHeader?: string) =>
         ? (c.req.raw.headers.get(parentEventIdHeader) ?? undefined)
         : undefined,
       defaultArea: new URL(c.req.raw.url).pathname,
+      path: new URL(c.req.raw.url).pathname,
     });
 
     c.set('logger', logger);

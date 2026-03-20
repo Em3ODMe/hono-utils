@@ -30,6 +30,6 @@ export type MessageHandlers<QueueData extends DataShape, Context> = {
   [Term in keyof QueueData]: Handler<QueueData[Term], Variables<Context>>;
 };
 
-export interface ContextFn<Env, Context> {
-  (env: Env, params: GenericQueueDataParams): Context;
+export interface ContextFn<Environment, Context> {
+  (env: Environment, params: GenericQueueDataParams): Context;
 }
