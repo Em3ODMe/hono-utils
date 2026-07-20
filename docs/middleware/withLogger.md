@@ -21,7 +21,7 @@ Wrap your custom logic with `withLogger`. The second argument receives the Hono 
 
 ```typescript
 import { Hono } from 'hono';
-import { withLogger } from './middleware/withLogger';
+import { withLogger, logger } from 'hono-utils';
 
 const app = new Hono();
 

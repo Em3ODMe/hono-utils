@@ -22,7 +22,7 @@ Register the middleware in your app. It is recommended to place this after the `
 
 ```typescript
 import { Hono } from 'hono';
-import { response, type HonoResponseVariables } from './middleware/response';
+import { response, type HonoResponseVariables } from 'hono-utils';
 
 const app = new Hono<{ Variables: HonoResponseVariables }>();
 

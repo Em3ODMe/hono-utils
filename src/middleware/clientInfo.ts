@@ -109,8 +109,7 @@ export const clientInfo: MiddlewareWithLoggingCapability<{
 
     logger?.debug('Retrieving hash secret from environment');
     const hashSecret = env[config?.hashSecretBinding ?? 'HASH_SECRET'] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (!hashSecret) {
       throw new Error('Hash secret is not available');

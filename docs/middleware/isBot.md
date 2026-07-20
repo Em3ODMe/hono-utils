@@ -21,7 +21,7 @@ Add the `HonoIsBotVariables` to your Hono instance to ensure `c.get('isBot')` is
 
 ```typescript
 import { Hono } from 'hono';
-import { isBot, type HonoIsBotVariables } from './middleware/isBot';
+import { isBot, type HonoIsBotVariables } from 'hono-utils';
 
 const app = new Hono<{ Variables: HonoIsBotVariables }>();
 ```

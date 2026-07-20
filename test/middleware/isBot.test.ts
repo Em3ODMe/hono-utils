@@ -15,7 +15,7 @@ describe(isBot.name, () => {
   });
 
   describe('default configuration (threshold: 49)', () => {
-    it('should detect bot when score is below threshold', async () => {
+    it('should fail with no botManagement configuration', async () => {
       app.get('/test', isBot({ threshold: 49 }), async (c) => {
         return c.text('ok');
       });

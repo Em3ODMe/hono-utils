@@ -34,13 +34,13 @@ import { QueueHandler } from 'hono-utils';
 ### Crypto
 
 ```ts
-import { pbkdf2, sha } from 'hono-utils';
+import { pbkdf2, sha } from 'hono-utils/crypto';
 ```
 
 ### Client
 
 ```ts
-import { createTypedClient } from 'hono-utils';
+import { createTypedClient } from 'hono-utils/client';
 ```
 
 ### Router
@@ -67,7 +67,6 @@ import { onError, onNotFound } from 'hono-utils';
   - [response](docs/middleware/response.md)
   - [validator](docs/middleware/validator.md)
   - [withLogger](docs/middleware/withLogger.md)
-  - [hydrateVariable](docs/middleware/hydrateVariable.md)
 
 - Queue
   - [QueueHandler](docs/queue/QueueHandler.md)

@@ -39,7 +39,7 @@ Initialize the client and wrap your RPC calls using the `rpcClient` instance.
 
 ```typescript
 // client.ts
-import { createTypedClient } from 'hono-utils';
+import { createTypedClient } from 'hono-utils/client';
 import type { AppType } from './server'; // Import type from server
 
 // Initialize the client

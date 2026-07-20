@@ -57,13 +57,12 @@ export const createTypedClient = <TApp extends Hono<any, any, any>>() => {
         return data as TSuccessData;
       } catch (err) {
         // 4. Handle Errors
-        let status: ContentfulStatusCode = 500;
         const { detail, statusCode } = err as {
           detail?: TSuccessData;
           statusCode?: ContentfulStatusCode;
         };
 
-        status = statusCode ?? 500;
+        const status = statusCode ?? 500;
 
         if (!detail) {
           options.errorHandler?.(status, {

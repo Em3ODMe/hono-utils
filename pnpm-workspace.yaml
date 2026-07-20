@@ -1,0 +1,4 @@
+minimumReleaseAgeExclude:
+  - hierarchical-area-logger@0.3.0
+  - hono@4.12.30
+  - '@cloudflare/workers-types@5.20260713.1'

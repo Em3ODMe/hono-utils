@@ -21,8 +21,7 @@ Attach the middleware to your Hono instance. You must pass the name of the bindi
 
 ```typescript
 import { Hono } from 'hono';
-import { queue } from './middleware/queue';
-import { queueHandler } from './queue/config';
+import { queue, queueHandler } from 'hono-utils';
 
 const app = new Hono();
 
@@ -53,6 +52,8 @@ app.post('/process', async (c) => {
 By combining this with the `logger` middleware, you can offload log persistence to a background worker.
 
 ```typescript
+import { logger, queue } from 'hono-utils';
+
 // 1. Initialize Logger
 app.use('*', logger({ service: 'api' }));
 

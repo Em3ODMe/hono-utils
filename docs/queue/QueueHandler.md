@@ -9,9 +9,8 @@
 The following example demonstrates how to define a schema, establish context, and register handlers using the `QueueHandler` orchestration.
 
 ```typescript
-import { QueueHandler } from 'hono-utils/queue';
+import { QueueHandler, type MessageHandlers, type ContextFn } from 'hono-utils';
 import { z } from 'zod';
-import { ContextFn, MessageHandlers } from './types';
 import { DB } from './yourDb';
 
 // 1. Define your message schema

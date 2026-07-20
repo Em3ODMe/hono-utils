@@ -52,8 +52,7 @@ export const isBot: MiddlewareWithLoggingCapability<{
 
     logger?.debug('Retrieving bot management data from cloudflare data');
     const botManagement = c.req.raw.cf?.botManagement as
-      | IncomingRequestCfPropertiesBotManagementBase
-      | undefined;
+      IncomingRequestCfPropertiesBotManagementBase | undefined;
 
     if (!botManagement) {
       throw new Error('botManagement is not available');

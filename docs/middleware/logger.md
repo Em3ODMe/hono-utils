@@ -21,7 +21,7 @@ Add the `HonoLoggerVariables` to your Hono instance and apply the middleware.
 
 ```typescript
 import { Hono } from 'hono';
-import { logger, type HonoLoggerVariables } from './middleware/logger';
+import { logger, type HonoLoggerVariables } from 'hono-utils';
 
 const app = new Hono<{ Variables: HonoLoggerVariables }>();
 

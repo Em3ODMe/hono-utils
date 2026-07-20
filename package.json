@@ -1,11 +1,11 @@
 {
   "name": "hono-utils",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "prepare": "husky",
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "unbuild",
+    "dev": "unbuild --stub",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "coverage": "vitest --coverage",
@@ -14,6 +14,7 @@
     "lint:check": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepack": "unbuild",
     "prepublishOnly": "npm run format && npm run lint && npm run test && npm run build"
   },
   "pre-commit": [
@@ -33,29 +34,37 @@
     "node": ">=18.0.0"
   },
   "description": "Hono Utils",
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260124.0",
-    "@eslint/js": "^9.0.0",
-    "@types/node": "^25.0.10",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
-    "@vitest/coverage-v8": "^4.0.18",
-    "eslint": "^9.0.0",
-    "husky": "^9.1.7",
-    "prettier": "^3.8.1",
-    "tsup": "^8.5.1",
-    "typescript": "^5.0.0",
-    "vitest": "^4.0.18",
-    "zod": "4.3.6"
-  },
   "dependencies": {
     "@paralleldrive/cuid2": "^3.3.0",
-    "hierarchical-area-logger": "^0.2.7",
-    "hono": "^4.10.3",
-    "ua-parser-js": "^2.0.8"
+    "hierarchical-area-logger": "^0.3.0",
+    "hono": "^4.12.30",
+    "ua-parser-js": "^2.0.10",
+    "zod": "4.4.3"
   },
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.mjs"
+    },
+    "./crypto": {
+      "types": "./dist/crypto/index.d.ts",
+      "import": "./dist/crypto/index.mjs",
+      "require": "./dist/crypto/index.cjs",
+      "default": "./dist/crypto/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client/createTypedClient.d.ts",
+      "import": "./dist/client/createTypedClient.mjs",
+      "require": "./dist/client/createTypedClient.cjs",
+      "default": "./dist/client/createTypedClient.mjs"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],
@@ -64,5 +73,19 @@
     "utils",
     "typescript",
     "nodejs"
-  ]
+  ],
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260713.1",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.63.0",
+    "@typescript-eslint/parser": "^8.63.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.7.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.9.5",
+    "unbuild": "^3.6.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
 }

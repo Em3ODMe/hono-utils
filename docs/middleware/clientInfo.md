@@ -21,10 +21,7 @@ To ensure type safety across your application, include `HonoClientInfoVariables`
 
 ```typescript
 import { Hono } from 'hono';
-import {
-  clientInfo,
-  type HonoClientInfoVariables,
-} from './middleware/clientInfo';
+import { clientInfo, type HonoClientInfoVariables } from 'hono-utils';
 
 type Bindings = {
   HASH_SECRET: string; // Required for security hash

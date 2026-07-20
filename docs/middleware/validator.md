@@ -22,7 +22,7 @@ Define your Zod schema and pass it to the `jsonValidator` within your route defi
 ```typescript
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { jsonValidator } from './middleware/jsonValidator';
+import { jsonValidator } from 'hono-utils';
 
 const app = new Hono();
 

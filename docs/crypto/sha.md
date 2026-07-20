@@ -11,7 +11,7 @@ A set of lightweight, secure utility functions for generating random salts and c
 Creates a cryptographically strong random salt encoded in Base64. It uses `crypto.getRandomValues()` to ensure the output is suitable for security-sensitive operations.
 
 ```typescript
-import { generateSalt } from './crypto';
+import { generateSalt } from 'hono-utils/crypto';
 
 const salt = generateSalt(32);
 // Returns a Base64 string like: "4fG8zX..."
@@ -29,7 +29,7 @@ Calculates the digest of a string using SHA-2 family algorithms. It supports opt
 #### Usage Example
 
 ```typescript
-import { hash } from './crypto';
+import { hash } from 'hono-utils/crypto';
 
 const secureHash = await hash({
   input: 'my-sensitive-data',
@@ -41,12 +41,12 @@ const secureHash = await hash({
 
 #### Parameters
 
-| Property    | Type                | Default     | Description                             |
+| Property | Type | Default | Description |
 | ----------- | ------------------- | ----------- | --------------------------------------- | ----------- | ------------------------- |
-| `input`     | `string`            | —           | The raw string to be hashed.            |
-| `algorithm` | `SHA-256            | SHA-384     | SHA-512`                                | `'SHA-256'` | The SHA-2 variant to use. |
-| `pepper`    | `string` (Optional) | `undefined` | A secret string prepended to the input. |
-| `salt`      | `string` (Optional) | `undefined` | A string appended to the input.         |
+| `input` | `string` | — | The raw string to be hashed. |
+| `algorithm` | `SHA-256            | SHA-384     | SHA-512` | `'SHA-256'` | The SHA-2 variant to use. |
+| `pepper` | `string` (Optional) | `undefined` | A secret string prepended to the input. |
+| `salt` | `string` (Optional) | `undefined` | A string appended to the input. |
 
 **Returns**: `Promise<string>` (Hex-encoded).
 

@@ -20,7 +20,7 @@ A collection of high-security functions for password hashing and verification us
 When a user signs up, generate a unique salt and hash their password before storage.
 
 ```typescript
-import { hash } from './crypto';
+import { hash } from 'hono-utils/crypto';
 
 const password = 'user-secret-password';
 const salt = crypto.randomUUID(); // Recommended: use a cryptographically secure random string
@@ -36,7 +36,7 @@ const passwordHash = await hash(password, salt, iterations);
 On login, retrieve the salt and hash from the database to verify the user's input.
 
 ```typescript
-import { verify } from './crypto';
+import { verify } from 'hono-utils/crypto';
 
 const isMatch = await verify(
   providedPassword,
