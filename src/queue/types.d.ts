@@ -31,5 +31,8 @@ export type MessageHandlers<QueueData extends DataShape, Context> = {
 };
 
 export interface ContextFn<Environment, Context> {
-  (env: Environment, params: GenericQueueDataParams): Context;
+  (
+    env: Environment,
+    params: GenericQueueDataParams
+  ): Context | Promise<Context>;
 }

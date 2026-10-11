@@ -112,6 +112,42 @@ describe('QueueHandler (Vitest)', () => {
       );
     });
 
+    it('awaits an async setContext and passes the RESOLVED context to handlers', async () => {
+      // Regression: the consumer must await setContext — an async factory
+      // previously leaked a Promise into `{ ...context }`, yielding {} and
+      // crashing handlers on `context.<field>` access.
+      const asyncQh = new QueueHandler<Schema, Environment, Context>({
+        schema,
+        setContext: async (_env, _params) => ({
+          source: 'async-ctx',
+          envMarker: 'resolved',
+        }),
+      });
+
+      const received: Array<{ context: unknown }> = [];
+      asyncQh.addHandler('taskA', async (_content, { context }) => {
+        received.push({ context });
+      });
+
+      const batch = createMockBatch([
+        {
+          handler: 'taskA',
+          content: { value: 'async-context' },
+          eventId: 'fixed-event-id',
+        },
+      ]);
+
+      await asyncQh.getConsumer()(batch, env);
+
+      expect(received).toHaveLength(1);
+      expect(received[0].context).toEqual({
+        source: 'async-ctx',
+        envMarker: 'resolved',
+        retry: expect.any(Function),
+        ack: expect.any(Function),
+      });
+    });
+
     it('processes multiple messages in a batch', async () => {
       const handlerA = vi.fn();
       const handlerB = vi.fn();

@@ -79,7 +79,9 @@ export class QueueHandler<Schema extends ZodObject<any>, Environment, Context> {
               handler as keyof typeof this.config.schema.shape
             ].parse(content) as z.infer<Schema>[typeof handler];
             const { retry, ack, ...metadata } = rest;
-            const context = this.config.setContext(env, restMessage);
+            // `setContext` may be async (e.g. secret resolution, DB setup):
+            // await it so handlers receive the RESOLVED context, not a Promise.
+            const context = await this.config.setContext(env, restMessage);
             await handlerFunction(parsedContent, {
               context: { ...context, retry, ack },
               metadata: {
