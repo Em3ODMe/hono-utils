@@ -34,7 +34,7 @@ import { QueueHandler } from 'hono-utils';
 ### Crypto
 
 ```ts
-import { pbkdf2, sha } from 'hono-utils/crypto';
+import { PBKDF2, SHA, HMAC } from 'hono-utils/crypto';
 ```
 
 ### Client

@@ -1,6 +1,6 @@
 {
   "name": "hono-utils",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "prepare": "husky",
@@ -36,10 +36,10 @@
   "description": "Hono Utils",
   "dependencies": {
     "@paralleldrive/cuid2": "^3.3.0",
-    "hierarchical-area-logger": "^0.3.0",
-    "hono": "^4.12.30",
+    "hierarchical-area-logger": "^0.3.1",
+    "hono": "^4.13.13",
     "ua-parser-js": "^2.0.10",
-    "zod": "4.4.3"
+    "zod": "4.6.5"
   },
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -75,7 +75,7 @@
     "nodejs"
   ],
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260713.1",
+    "@cloudflare/workers-types": "^5.20261011.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
     "@typescript-eslint/eslint-plugin": "^8.63.0",
@@ -83,9 +83,9 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
     "husky": "^9.1.7",
-    "prettier": "^3.9.5",
+    "prettier": "^3.9.10",
     "unbuild": "^3.6.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.3"
   }
 }

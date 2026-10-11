@@ -5,4 +5,5 @@ export * from './i18n';
 export * from './queue';
 export * from './response';
 export * from './clientInfo';
+export * from './queryValidator';
 export type { MiddlewareWithLoggingCapability } from './types';
