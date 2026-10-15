@@ -4,12 +4,37 @@ export type HonoLanguageVariables = {
   language: string;
 };
 
-type I18nShape = {
+export type I18nShape = {
   [key: string]: I18nShape | string;
 };
 
-export type HonoI18nVariables = {
-  t: ReturnType<typeof setI18n>;
+type I18nPaths<T> = T extends string
+  ? never
+  : {
+      [K in keyof T]: K extends string
+        ? T[K] extends string
+          ? K
+          : `${K}.${I18nPaths<T[K]>}`
+        : never;
+    }[keyof T];
+
+/**
+ * Dot-notated translation keys derived from a translations dictionary.
+ * @example
+ * ```ts
+ * type Keys = I18nKey<typeof translations>; // 'greetings.polite' | 'success.user.created'
+ * ```
+ */
+export type I18nKey<T extends I18nShape> = I18nPaths<T[keyof T]>;
+
+export type I18nTranslate<T extends I18nShape> = (
+  input: I18nKey<T>,
+  params?: Record<string, string | number>,
+  overrideLanguage?: keyof T
+) => string;
+
+export type HonoI18nVariables<T extends I18nShape = I18nShape> = {
+  t: I18nTranslate<T>;
 };
 
 /**
@@ -26,34 +51,43 @@ const setI18n =
     defaultLanguage: string
   ) =>
   (
-    input: string,
+    input: I18nKey<T>,
     params?: Record<string, string | number>,
     overrideLanguage?: keyof T
   ): string => {
-    const result = input.split('.').reduce(
-      (acc: unknown, key: string) => {
-        if (acc && typeof acc === 'object' && key in acc) {
-          return (acc as I18nShape)[key];
+    const lookup = (
+      dictionary: I18nShape | string | undefined,
+      path: string[]
+    ): unknown => {
+      let current: unknown = dictionary;
+      for (const key of path) {
+        if (current && typeof current === 'object' && key in current) {
+          current = (current as I18nShape)[key];
         } else {
-          if (
-            translations[defaultLanguage] &&
-            typeof translations[defaultLanguage] === 'object' &&
-            key in translations[defaultLanguage]
-          ) {
-            return (translations[defaultLanguage] as I18nShape)[key];
-          } else {
-            return input;
-          }
+          return undefined;
         }
-      },
-      translations[overrideLanguage ?? language]
-    );
+      }
+      return current;
+    };
+
+    const path = input.split('.');
+
+    // Look up the whole path in the active (or override) language first,
+    // then fall back to the whole path in the default language. Falling
+    // back per path segment would resolve nested keys against the wrong
+    // subtree of the default language.
+    const result =
+      lookup(translations[overrideLanguage ?? language] as I18nShape, path) ??
+      lookup(translations[defaultLanguage] as I18nShape | undefined, path);
 
     if (params) {
       return Object.keys(params).reduce(
         (acc, key) => {
+          // Escape the key before interpolating so keys containing RegExp
+          // metacharacters do not over-match.
+          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           return acc.replace(
-            new RegExp(`{{${key}}}`, 'g'),
+            new RegExp(`{{${escapedKey}}}`, 'g'),
             params[key].toString()
           );
         },
@@ -93,7 +127,7 @@ export const i18n = <T extends I18nShape>(
   defaultLanguage: string
 ) => ({
   middleware: createMiddleware<{
-    Variables: HonoLanguageVariables & HonoI18nVariables;
+    Variables: HonoLanguageVariables & HonoI18nVariables<T>;
   }>(async ({ set, var: { language } }, next) => {
     if (!language) {
       throw new Error(

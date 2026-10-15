@@ -62,11 +62,10 @@ import { onError, onNotFound } from 'hono-utils';
   - [clientInfo](docs/middleware/clientInfo.md)
   - [i18n](docs/middleware/i18n.md)
   - [isBot](docs/middleware/isBot.md)
+  - [jsonValidator](docs/middleware/jsonValidator.md)
   - [logger](docs/middleware/logger.md)
   - [queue](docs/middleware/queue.md)
   - [response](docs/middleware/response.md)
-  - [validator](docs/middleware/validator.md)
-  - [withLogger](docs/middleware/withLogger.md)
 
 - Queue
   - [QueueHandler](docs/queue/QueueHandler.md)

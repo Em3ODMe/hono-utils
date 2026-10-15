@@ -1,6 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { validator } from 'hono/validator';
 import { z } from 'zod';
+import { formatZodError } from '../utils';
 
 /**
  * @description
@@ -12,7 +13,7 @@ import { z } from 'zod';
  * ```ts
  * app.get('/user', queryValidator(z.object({
  *   name: z.string(),
- *   age: z.number(),
+ *   age: z.coerce.number(),
  * })), (c) => {
  *   const { name, age } = await c.req.valid('query');
  *   return c.json({ name, age });
@@ -26,7 +27,7 @@ export const queryValidator = <T extends z.ZodObject<z.ZodRawShape>>(
     const parsed = schema.safeParse(value);
     if (!parsed.success) {
       throw new HTTPException(400, {
-        message: z.prettifyError(parsed.error),
+        message: formatZodError(parsed.error),
       });
     }
     return parsed.data;

@@ -28,7 +28,7 @@ Register the handler using the `.notFound()` method on your Hono instance.
 
 ```typescript
 import { Hono } from 'hono';
-import { onNotFound } from './middleware/onNotFound';
+import { onNotFound } from 'hono-utils';
 
 const app = new Hono();
 

@@ -121,9 +121,7 @@ describe('createTypedClient', () => {
   it('should handle "Fetch malformed" when DetailedError has no detail', async () => {
     const rpc = createTypedClient<MockApp>()(defaultOptions);
 
-    // DetailedError with null/undefined detail
-    const malformedError = new DetailedError('Bad', { statusCode: 500 });
-    (parseResponse as Mock).mockRejectedValueOnce(malformedError);
+    // The request function rejects with an error carrying detail + statusCode
     const requestFn = vi
       .fn()
       .mockRejectedValue({ detail: { message: 'Test' }, statusCode: 400 });
@@ -154,5 +152,93 @@ describe('createTypedClient', () => {
     expect(onErrorSpy).not.toHaveBeenCalled();
 
     expect(onEndSpy).toHaveBeenCalled();
+  });
+
+  it('should pass a headers function through to hc', async () => {
+    const headersFn = () => ({ Authorization: 'Bearer token' });
+    const rpc = createTypedClient<MockApp>()({
+      ...defaultOptions,
+      headers: headersFn,
+    });
+
+    (parseResponse as Mock).mockResolvedValueOnce({ id: 1 });
+    const requestFn = vi
+      .fn()
+      .mockResolvedValue({ headers: new Headers(), ok: true } as Response);
+
+    await rpc(requestFn);
+
+    expect(hc).toHaveBeenCalledWith('http://localhost:3000', {
+      headers: headersFn,
+      fetch: mockFetch,
+    });
+  });
+
+  it('should pass an async headers function through to hc', async () => {
+    const headersFn = async () => ({ Authorization: 'Bearer token' });
+    const rpc = createTypedClient<MockApp>()({
+      ...defaultOptions,
+      headers: headersFn,
+    });
+
+    (parseResponse as Mock).mockResolvedValueOnce({ id: 1 });
+    const requestFn = vi
+      .fn()
+      .mockResolvedValue({ headers: new Headers(), ok: true } as Response);
+
+    await rpc(requestFn);
+
+    expect(hc).toHaveBeenCalledWith('http://localhost:3000', {
+      headers: headersFn,
+      fetch: mockFetch,
+    });
+  });
+
+  it('should preserve the status code from a DetailedError', async () => {
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
+
+    const detailedError = new DetailedError('404 Not Found', {
+      statusCode: 404,
+      detail: { message: 'Not found' },
+    });
+    (parseResponse as Mock).mockRejectedValueOnce(detailedError);
+    const requestFn = vi
+      .fn()
+      .mockResolvedValue({ headers: new Headers(), ok: false } as Response);
+
+    await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow('Not found');
+
+    expect(errorHandlerSpy).toHaveBeenCalledWith(404, {
+      message: 'Not found',
+      status: 404,
+    });
+  });
+
+  it('should pass the x-event-id header to onError and errorHandler', async () => {
+    const rpc = createTypedClient<MockApp>()(defaultOptions);
+
+    const headers = new Headers({ 'x-event-id': 'event-123' });
+    const detailedError = new DetailedError('400 Bad Request', {
+      statusCode: 400,
+      detail: { message: 'Bad request' },
+    });
+    (parseResponse as Mock).mockRejectedValueOnce(detailedError);
+    const requestFn = vi
+      .fn()
+      .mockResolvedValue({ headers, ok: false } as Response);
+
+    await expect(rpc(requestFn, defaultCallbacks)).rejects.toThrow(
+      'Bad request'
+    );
+
+    expect(onErrorSpy).toHaveBeenCalledWith(
+      { message: 'Bad request' },
+      headers
+    );
+    expect(errorHandlerSpy).toHaveBeenCalledWith(400, {
+      message: 'Bad request',
+      eventId: 'event-123',
+      status: 400,
+    });
   });
 });

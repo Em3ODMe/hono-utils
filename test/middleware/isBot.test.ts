@@ -7,6 +7,20 @@ type Env = {
   Variables: HonoIsBotVariables;
 };
 
+const createRequestWithBotManagement = (
+  botManagement: { score?: number; verifiedBot?: boolean },
+  path = 'http://localhost/test'
+) => {
+  const req = new Request(path);
+  Object.defineProperty(req, 'cf', {
+    value: {
+      botManagement,
+    },
+    writable: false,
+  });
+  return req;
+};
+
 describe(isBot.name, () => {
   let app: Hono<Env>;
 
@@ -14,8 +28,8 @@ describe(isBot.name, () => {
     app = createMiddlewareTester<Env>();
   });
 
-  describe('default configuration (threshold: 49)', () => {
-    it('should fail with no botManagement configuration', async () => {
+  describe('when botManagement is missing', () => {
+    it('should return 500', async () => {
       app.get('/test', isBot({ threshold: 49 }), async (c) => {
         return c.text('ok');
       });
@@ -24,21 +38,16 @@ describe(isBot.name, () => {
 
       expect(res.status).toBe(500);
     });
+  });
 
-    it('should detect bot when score is below threshold', async () => {
+  describe('default configuration (threshold: 49)', () => {
+    it('should return 401 when score is below the threshold', async () => {
       app.get('/test', isBot({ threshold: 49 }), async (c) => {
         return c.text('ok');
       });
-      const req = new Request('http://localhost/test');
-
-      Object.defineProperty(req, 'cf', {
-        value: {
-          botManagement: {
-            score: 30,
-            verifiedBot: false,
-          },
-        },
-        writable: false,
+      const req = createRequestWithBotManagement({
+        score: 30,
+        verifiedBot: false,
       });
 
       const res = await app.fetch(req);
@@ -46,19 +55,12 @@ describe(isBot.name, () => {
       expect(res.status).toBe(401);
     });
 
-    it('should detect bot when score is below threshold', async () => {
+    it('should return 401 when score defaults to 54 and is below the threshold', async () => {
       app.get('/test', isBot({ threshold: 80 }), async (c) => {
         return c.text('ok');
       });
-      const req = new Request('http://localhost/test');
-
-      Object.defineProperty(req, 'cf', {
-        value: {
-          botManagement: {
-            verifiedBot: false,
-          },
-        },
-        writable: false,
+      const req = createRequestWithBotManagement({
+        verifiedBot: false,
       });
 
       const res = await app.fetch(req);
@@ -66,7 +68,7 @@ describe(isBot.name, () => {
       expect(res.status).toBe(401);
     });
 
-    it('should detect bot when score is below threshold', async () => {
+    it('should allow verified bots below the threshold when allowVerifiedBot is true', async () => {
       app.get(
         '/test',
         isBot({ threshold: 49, allowVerifiedBot: true }),
@@ -74,16 +76,9 @@ describe(isBot.name, () => {
           return c.text(c.get('isBot')?.toString());
         }
       );
-      const req = new Request('http://localhost/test');
-
-      Object.defineProperty(req, 'cf', {
-        value: {
-          botManagement: {
-            score: 30,
-            verifiedBot: true,
-          },
-        },
-        writable: false,
+      const req = createRequestWithBotManagement({
+        score: 30,
+        verifiedBot: true,
       });
 
       const res = await app.fetch(req);
@@ -92,7 +87,7 @@ describe(isBot.name, () => {
       expect(await res.text()).toBe('true');
     });
 
-    it('should detect bot when score is below threshold', async () => {
+    it('should block non-verified bots below the threshold even when allowVerifiedBot is true', async () => {
       app.get(
         '/test',
         isBot({ threshold: 49, allowVerifiedBot: true }),
@@ -100,16 +95,53 @@ describe(isBot.name, () => {
           return c.text(c.get('isBot')?.toString());
         }
       );
-      const req = new Request('http://localhost/test');
+      const req = createRequestWithBotManagement({
+        score: 48,
+        verifiedBot: undefined,
+      });
 
-      Object.defineProperty(req, 'cf', {
-        value: {
-          botManagement: {
-            score: 48,
-            verifiedBot: undefined,
-          },
-        },
-        writable: false,
+      const res = await app.fetch(req);
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should treat a score equal to the threshold as human', async () => {
+      app.get('/test', isBot({ threshold: 49 }), async (c) => {
+        return c.text(c.get('isBot')?.toString());
+      });
+      const req = createRequestWithBotManagement({
+        score: 49,
+        verifiedBot: false,
+      });
+
+      const res = await app.fetch(req);
+
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe('false');
+    });
+
+    it('should treat a score of 100 as human and set isBot to false', async () => {
+      app.get('/test', isBot({ threshold: 49 }), async (c) => {
+        return c.text(c.get('isBot')?.toString());
+      });
+      const req = createRequestWithBotManagement({
+        score: 100,
+        verifiedBot: false,
+      });
+
+      const res = await app.fetch(req);
+
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe('false');
+    });
+
+    it('should block verified bots below the threshold when allowVerifiedBot is not set', async () => {
+      app.get('/test', isBot({ threshold: 49 }), async (c) => {
+        return c.text('ok');
+      });
+      const req = createRequestWithBotManagement({
+        score: 30,
+        verifiedBot: true,
       });
 
       const res = await app.fetch(req);
@@ -118,21 +150,14 @@ describe(isBot.name, () => {
     });
   });
 
-  describe('default configuration (threshold: 49)', () => {
-    it('should detect bot when score is below threshold', async () => {
+  describe('above the threshold', () => {
+    it('should pass when the score is above the threshold', async () => {
       app.get('/test', isBot({ threshold: 51 }), async (c) => {
         return c.text('ok');
       });
-      const req = new Request('http://localhost/test');
-
-      Object.defineProperty(req, 'cf', {
-        value: {
-          botManagement: {
-            score: 60,
-            verifiedBot: false,
-          },
-        },
-        writable: false,
+      const req = createRequestWithBotManagement({
+        score: 60,
+        verifiedBot: false,
       });
 
       const res = await app.fetch(req);

@@ -1,6 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { validator } from 'hono/validator';
 import { z } from 'zod';
+import { formatZodError } from '../utils';
 
 /**
  * @description
@@ -26,7 +27,7 @@ export const jsonValidator = <T extends z.ZodRawShape>(
     const parsed = schema.safeParse(value);
     if (!parsed.success) {
       throw new HTTPException(400, {
-        message: z.prettifyError(parsed.error),
+        message: formatZodError(parsed.error),
       });
     }
     return parsed.data;

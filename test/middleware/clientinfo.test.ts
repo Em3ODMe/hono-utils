@@ -18,7 +18,7 @@ describe(clientInfo.name, () => {
   });
 
   describe('Should fail', () => {
-    it('should detect bot when score is below threshold', async () => {
+    it('should return 500 when Cloudflare data is missing', async () => {
       app.get('/test', clientInfo({}), async (c) => {
         return c.text('ok');
       });
@@ -27,7 +27,8 @@ describe(clientInfo.name, () => {
 
       expect(res.status).toBe(500);
     });
-    it('should detect bot when score is below threshold', async () => {
+
+    it('should return 500 when the hash secret is missing', async () => {
       app.get('/test', clientInfo({}), async (c) => {
         return c.text('ok');
       });
@@ -42,10 +43,34 @@ describe(clientInfo.name, () => {
 
       expect(res.status).toBe(500);
     });
+
+    it('should return 500 when the CF-Connecting-IP header is missing', async () => {
+      app.get(
+        '/test',
+        clientInfo({ hashSecretBinding: 'HASH_SECRET_BINDING' }),
+        async (c) => {
+          return c.text('ok');
+        }
+      );
+
+      const req = new Request('http://localhost/test');
+      Object.defineProperty(req, 'cf', {
+        value: {
+          cf: {},
+        },
+        writable: false,
+      });
+
+      const res = await app.fetch(req, {
+        HASH_SECRET_BINDING: 'test',
+      });
+
+      expect(res.status).toBe(500);
+    });
   });
 
   describe('Should success', () => {
-    it('should detect bot when score is below threshold', async () => {
+    it('should set full client info in the context', async () => {
       app.get(
         '/test',
         clientInfo({ hashSecretBinding: 'HASH_SECRET_BINDING' }),
@@ -58,6 +83,7 @@ describe(clientInfo.name, () => {
         headers: {
           'user-agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+          'CF-Connecting-IP': '203.0.113.7',
         },
       });
       Object.defineProperty(req, 'cf', {
@@ -87,14 +113,13 @@ describe(clientInfo.name, () => {
           name: 'Blink',
           version: '58.0.3029.110',
         },
-        ip: '127.0.0.1',
+        ip: '203.0.113.7',
         isEUCountry: false,
         os: {
           name: 'Windows',
           version: '10',
         },
-        securityHash:
-          '40d318a28b79732428a2d2ccf59aa1dd8c90f56cf2ab1aaae4bc831419da736f55d6363b6f0ab6d1c508a1a12e1d870bdfe41b464a638a5894f0e7f2a012770a',
+        securityHash: 'unset',
         userAgent:
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
       });

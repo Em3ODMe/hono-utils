@@ -1,6 +1,6 @@
 # ClientInfo Middleware
 
-The `clientInfo` middleware for [Hono](https://hono.dev/) is a robust utility designed to run on **Cloudflare Workers**. It aggregates geolocation data from Cloudflare's edge, parses complex User-Agent strings, and generates a unique security hash for session integrity or bot detection.
+The `clientInfo` middleware for [Hono](https://hono.dev/) is a robust utility designed to run on **Cloudflare Workers**. It aggregates geolocation data from Cloudflare's edge, parses complex User-Agent strings, and optionally generates a security hash for session integrity or bot detection.
 
 ---
 
@@ -8,7 +8,7 @@ The `clientInfo` middleware for [Hono](https://hono.dev/) is a robust utility de
 
 - **Geolocation Extraction:** Automatically retrieves city, country, coordinates, and timezone from `req.raw.cf`.
 - **User-Agent Parsing:** Utilizes `ua-parser-js` to break down the browser, OS, device type, and CPU architecture.
-- **Security Hashing:** Generates a SHA-512 "fingerprint" of the client using a combination of IP, location, and a secret pepper.
+- **Custom Security Hash:** Generates a `securityHash` via a user-supplied `createSecurityHashString` callback (defaults to `'unset'` when not provided).
 - **Hono Integration:** Injects all data into the Hono context (`c.get('client')`) with full TypeScript support.
 
 ---
@@ -24,7 +24,7 @@ import { Hono } from 'hono';
 import { clientInfo, type HonoClientInfoVariables } from 'hono-utils';
 
 type Bindings = {
-  HASH_SECRET: string; // Required for security hash
+  HASH_SECRET: string; // Required by the middleware
 };
 
 const app = new Hono<{
@@ -47,7 +47,7 @@ app.get('/debug', (c) => {
     message: `Hello user from ${client.city}!`,
     device: client.device.type, // e.g., "mobile" or "desktop"
     isEU: client.isEUCountry,
-    fingerprint: client.securityHash,
+    securityHash: client.securityHash,
   });
 });
 ```
@@ -58,18 +58,22 @@ app.get('/debug', (c) => {
 
 The `clientInfo` function accepts an optional configuration object:
 
-| Option               | Type       | Default                  | Description                                                   |
-| -------------------- | ---------- | ------------------------ | ------------------------------------------------------------- |
-| `hashSecretBinding`  | `string`   | `'HASH_SECRET'`          | The key in your `env` that holds the secret pepper.           |
-| `securityHashString` | `Function` | IP + City + Country + UA | A custom callback to define which fields are hashed together. |
+| Option                     | Type                                     | Default         | Description                                                                                                      |
+| -------------------------- | ---------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `useLogger`                | `boolean`                                | `undefined`     | When `true`, logs debug/info entries through the request `logger` (registered before this one).                  |
+| `hashSecretBinding`        | `string`                                 | `'HASH_SECRET'` | The key in your `env` that holds the hash secret. The middleware throws if it is missing.                        |
+| `createSecurityHashString` | `(content, bindings) => Promise<string>` | `undefined`     | A custom async callback that returns the `securityHash` value. When omitted, `securityHash` is set to `'unset'`. |
 
 ### Custom Security Hash Example
 
 ```typescript
 app.use(
   clientInfo({
-    securityHashString: (data) => `${data.ip}-${data.asn}-${data.device.model}`,
-    hashSecretBinding: 'MY_APP_PEPPER',
+    createSecurityHashString: async (data, bindings) => {
+      const secret = bindings.HASH_SECRET;
+      // Return any string you like (e.g. an HMAC/SHA digest of the fields).
+      return `${data.ip}-${data.asn}-${data.device.model}`;
+    },
   })
 );
 ```
@@ -99,14 +103,14 @@ Parsed from the `User-Agent` header.
 ### 3. Metadata
 
 - **`userAgent`:** The raw, unparsed User-Agent string.
-- **`securityHash`:** A SHA-512 hex string used to verify if client attributes have changed during a session.
+- **`securityHash`:** The value returned by `createSecurityHashString`, or `'unset'` when no callback is provided. Use it to verify whether client attributes have changed during a session.
 
 ---
 
 ## Technical Considerations
 
 > [!IMPORTANT]
-> **Cloudflare Environment:** This middleware relies on the `req.raw.cf` object, which is only populated when running on the Cloudflare Workers runtime. It will throw an error if used in Node.js or Bun environments without a Cloudflare proxy.
+> **Cloudflare Environment:** This middleware relies on the `req.raw.cf` object and the `CF-Connecting-IP` header, which are only populated when running on the Cloudflare Workers runtime. It will throw an error if either is unavailable (e.g. in Node.js or Bun without a Cloudflare proxy). It also throws if the `HASH_SECRET` binding is not present in the environment.
 
 > [!TIP]
-> **Security Hash Stability:** The default hash includes the `ip`. If your users frequently switch between Wi-Fi and Cellular data, the `securityHash` will change. For more stable "sticky" sessions, override `securityHashString` to exclude the IP.
+> **Security Hash Stability:** The security hash is fully controlled by your `createSecurityHashString` callback. If you want a stable "sticky" session identifier, avoid including volatile fields like the client IP (which changes when users switch between Wi-Fi and cellular).

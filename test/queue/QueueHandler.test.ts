@@ -1,19 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { QueueHandler } from '../../src/queue/QueueHandler';
+import { QueueHandler } from '@/queue/QueueHandler';
+import { MAX_RETRY_DELAY_SECONDS } from '@/queue/backoff';
 import { z } from 'zod';
-import type { MessageBatch, Queue } from '@cloudflare/workers-types';
+import type {
+  MessageBatch,
+  MessageBatchMetadata,
+  Queue,
+  QueueMetrics,
+} from '@cloudflare/workers-types';
 import { ContextFn, GenericQueueData, MessageHandlers } from '@/queue/types';
-
-vi.mock('@paralleldrive/cuid2', () => ({
-  init: () => () => 'fixed-event-id',
-}));
+import type { BatchInfo, BatchMessage } from '@/queue/types';
 
 const mockQueue: Queue<unknown> = {
   send: vi.fn(),
   sendBatch: vi.fn(),
+  metrics: async function (): Promise<QueueMetrics> {
+    return {} as QueueMetrics;
+  },
 };
 
+const createEventId = () => 'fixed-event-id';
+
 const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
+  /* empty */
+});
+
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {
   /* empty */
 });
 
@@ -39,30 +51,39 @@ const setContext: ContextFn<Environment, Context> = (
   envMarker: 'ctx',
 });
 
-const createMockBatch = (messages: QueueData[]): MessageBatch<QueueData> => ({
-  messages: messages.map((msg) => ({
-    attempts: 0,
-    body: msg,
-    id: 'msg-id',
-    timestamp: new Date(),
-    ack: vi.fn(),
-    retry: vi.fn(),
-  })),
-  queue: 'test-queue',
-  ackAll: vi.fn(),
-  retryAll: vi.fn(),
-});
+const createMockBatch = (messages: QueueData[], attempts: number[] = []) => {
+  const spies = messages.map(() => ({ ack: vi.fn(), retry: vi.fn() }));
+  const ackAll = vi.fn();
+  const retryAll = vi.fn();
+  const batch: MessageBatch<QueueData> = {
+    messages: messages.map((msg, index) => ({
+      attempts: attempts[index] ?? 0,
+      body: msg,
+      id: `msg-id-${index}`,
+      timestamp: new Date(),
+      ack: spies[index].ack,
+      retry: spies[index].retry,
+    })),
+    queue: 'test-queue',
+    ackAll,
+    retryAll,
+    metadata: { metrics: {} as MessageBatchMetadata['metrics'] },
+  };
+  return { batch, spies, ackAll, retryAll };
+};
 
 describe('QueueHandler (Vitest)', () => {
   beforeEach(() => {
     qh = new QueueHandler<Schema, Environment, Context>({
       schema,
       setContext,
+      createEventId,
     });
 
     env = { NAME: 'env-test' };
 
-    consoleSpy.mockReset();
+    consoleSpy.mockClear();
+    consoleErrorSpy.mockClear();
   });
 
   describe('getConsumer', () => {
@@ -78,7 +99,7 @@ describe('QueueHandler (Vitest)', () => {
       qh.addHandler('taskA', handlerA);
       const consumer = qh.getConsumer();
 
-      const batch = createMockBatch([
+      const { batch, spies } = createMockBatch([
         {
           handler: 'taskA',
           content: { value: 'hello' },
@@ -90,12 +111,13 @@ describe('QueueHandler (Vitest)', () => {
 
       expect(handlerA).toHaveBeenCalled();
       expect(calledWith.content).toEqual({ value: 'hello' });
+      expect(spies[0].retry).not.toHaveBeenCalled();
     });
 
-    it('logs warning when no handler is registered', async () => {
+    it('logs warning and ack when no handler is registered', async () => {
       const consumer = qh.getConsumer();
 
-      const batch = createMockBatch([
+      const { batch, spies } = createMockBatch([
         {
           handler: 'unknownTask' as QueueData['handler'],
           content: {} as QueueData['content'],
@@ -110,6 +132,7 @@ describe('QueueHandler (Vitest)', () => {
           'No handler registered for handlerName "unknownTask"'
         )
       );
+      expect(spies[0].ack).toHaveBeenCalledTimes(1);
     });
 
     it('awaits an async setContext and passes the RESOLVED context to handlers', async () => {
@@ -122,6 +145,7 @@ describe('QueueHandler (Vitest)', () => {
           source: 'async-ctx',
           envMarker: 'resolved',
         }),
+        createEventId,
       });
 
       const received: Array<{ context: unknown }> = [];
@@ -129,7 +153,7 @@ describe('QueueHandler (Vitest)', () => {
         received.push({ context });
       });
 
-      const batch = createMockBatch([
+      const { batch } = createMockBatch([
         {
           handler: 'taskA',
           content: { value: 'async-context' },
@@ -157,7 +181,7 @@ describe('QueueHandler (Vitest)', () => {
 
       const consumer = qh.getConsumer();
 
-      const batch = createMockBatch([
+      const { batch } = createMockBatch([
         {
           handler: 'taskA',
           content: { value: 'msg1' },
@@ -177,7 +201,7 @@ describe('QueueHandler (Vitest)', () => {
       expect(handlerB).toHaveBeenCalledTimes(1);
     });
 
-    it('continues processing other messages if one fails', async () => {
+    it('continues processing other messages if one fails, retrying the failed one', async () => {
       const handlerA = vi.fn();
       const handlerB = vi.fn().mockRejectedValue(new Error('Boom'));
 
@@ -186,7 +210,7 @@ describe('QueueHandler (Vitest)', () => {
 
       const consumer = qh.getConsumer();
 
-      const batch = createMockBatch([
+      const { batch, spies } = createMockBatch([
         { handler: 'taskB', content: { count: 1 }, eventId: 'fixed-event-id' }, // Will fail
         {
           handler: 'taskA',
@@ -199,6 +223,334 @@ describe('QueueHandler (Vitest)', () => {
 
       expect(handlerB).toHaveBeenCalled();
       expect(handlerA).toHaveBeenCalled();
+      // The failed message must be retried, not silently acked
+      expect(spies[0].retry).toHaveBeenCalledTimes(1);
+      expect(spies[1].retry).not.toHaveBeenCalled();
+    });
+
+    it('retries a message whose content fails schema validation', async () => {
+      const handlerA = vi.fn();
+      qh.addHandler('taskA', handlerA);
+
+      const consumer = qh.getConsumer();
+
+      const { batch, spies } = createMockBatch([
+        {
+          handler: 'taskA',
+          // Wrong shape: schema expects { value: string }
+          content: { value: 123 } as unknown as QueueData['content'],
+          eventId: 'fixed-event-id',
+        },
+      ]);
+
+      await consumer(batch, env);
+
+      expect(handlerA).not.toHaveBeenCalled();
+      expect(spies[0].retry).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+
+    it('retries a message when setContext rejects', async () => {
+      const failingQh = new QueueHandler<Schema, Environment, Context>({
+        schema,
+        setContext: async () => {
+          throw new Error('Context setup failed');
+        },
+        createEventId,
+      });
+
+      const handlerA = vi.fn();
+      failingQh.addHandler('taskA', handlerA);
+
+      const { batch, spies } = createMockBatch([
+        {
+          handler: 'taskA',
+          content: { value: 'ctx-error' },
+          eventId: 'fixed-event-id',
+        },
+      ]);
+
+      await failingQh.getConsumer()(batch, env);
+
+      expect(handlerA).not.toHaveBeenCalled();
+      expect(spies[0].retry).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('getConsumer with processAsBatch', () => {
+    it('calls the batch handler once with all messages of its name, in batch order', async () => {
+      const received: Array<unknown> = [];
+      qh.addHandler(
+        'taskA',
+        async (messages, batchInfo) => {
+          received.push(messages, batchInfo);
+        },
+        { processAsBatch: true }
+      );
+      const singleHandlerB = vi.fn();
+      qh.addHandler('taskB', singleHandlerB);
+
+      const { batch } = createMockBatch([
+        { handler: 'taskA', content: { value: 'a1' }, eventId: 'event-1' },
+        { handler: 'taskB', content: { count: 1 }, eventId: 'event-2' },
+        { handler: 'taskA', content: { value: 'a2' }, eventId: 'event-3' },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      expect(received).toHaveLength(2);
+      const [messages, batchInfo] = received as [
+        BatchMessage<{ value: string }, Context>[],
+        BatchInfo,
+      ];
+      expect(messages.map((item) => item.content)).toEqual([
+        { value: 'a1' },
+        { value: 'a2' },
+      ]);
+      expect(batchInfo.queue).toBe('test-queue');
+      // The single handler still receives its own message individually
+      expect(singleHandlerB).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves per-message metadata and context in batch items', async () => {
+      const received: Array<unknown> = [];
+      qh.addHandler(
+        'taskA',
+        async (messages) => {
+          received.push(messages);
+        },
+        { processAsBatch: true }
+      );
+
+      const { batch } = createMockBatch([
+        {
+          handler: 'taskA',
+          content: { value: 'a1' },
+          eventId: 'event-1',
+          parentEventId: 'parent-1',
+        },
+        { handler: 'taskA', content: { value: 'a2' }, eventId: 'event-2' },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      const [messages] = received as [
+        BatchMessage<{ value: string }, Context>[],
+      ];
+      expect(messages[0].metadata.eventId).toBe('event-1');
+      expect(messages[0].metadata.parentEventId).toBe('parent-1');
+      expect(messages[1].metadata.eventId).toBe('event-2');
+      expect(messages[0].context).toEqual({
+        source: 'test',
+        envMarker: 'ctx',
+        retry: expect.any(Function),
+        ack: expect.any(Function),
+      });
+    });
+
+    it('retries an invalid message individually and batches the rest', async () => {
+      const batchHandler = vi.fn();
+      qh.addHandler('taskA', batchHandler, { processAsBatch: true });
+
+      const { batch, spies } = createMockBatch([
+        { handler: 'taskA', content: { value: 'ok' }, eventId: 'event-1' },
+        {
+          handler: 'taskA',
+          content: { value: 123 } as unknown as QueueData['content'],
+          eventId: 'event-2',
+        },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      expect(spies[1].retry).toHaveBeenCalledTimes(1);
+      expect(batchHandler).toHaveBeenCalledTimes(1);
+      const [messages] = batchHandler.mock.calls[0] as [
+        BatchMessage<{ value: string }, Context>[],
+        BatchInfo,
+      ];
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toEqual({ value: 'ok' });
+    });
+
+    it('retries every group message when the batch handler throws', async () => {
+      qh.addHandler(
+        'taskA',
+        async () => {
+          throw new Error('Batch boom');
+        },
+        { processAsBatch: true }
+      );
+
+      const { batch, spies } = createMockBatch([
+        { handler: 'taskA', content: { value: 'a1' }, eventId: 'event-1' },
+        { handler: 'taskA', content: { value: 'a2' }, eventId: 'event-2' },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      expect(spies[0].retry).toHaveBeenCalled();
+      expect(spies[1].retry).toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+
+    it('passes batch ackAll/retryAll through to the handler', async () => {
+      qh.addHandler(
+        'taskA',
+        async (_messages, batchInfo) => {
+          batchInfo.ackAll();
+          batchInfo.retryAll();
+        },
+        { processAsBatch: true }
+      );
+
+      const { batch, ackAll, retryAll } = createMockBatch([
+        { handler: 'taskA', content: { value: 'a1' }, eventId: 'event-1' },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      expect(ackAll).toHaveBeenCalledTimes(1);
+      expect(retryAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call the batch handler when every message fails parsing', async () => {
+      const batchHandler = vi.fn();
+      qh.addHandler('taskA', batchHandler, { processAsBatch: true });
+
+      const { batch, spies } = createMockBatch([
+        {
+          handler: 'taskA',
+          content: { value: 123 } as unknown as QueueData['content'],
+          eventId: 'event-1',
+        },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      expect(batchHandler).not.toHaveBeenCalled();
+      expect(spies[0].retry).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('retry backoff', () => {
+    it('uses the constructor baseRetryDelaySeconds with exponential backoff', async () => {
+      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+        schema,
+        setContext,
+        createEventId,
+        baseRetryDelaySeconds: 2,
+      });
+      backoffQh.addHandler(
+        'taskA',
+        vi.fn().mockRejectedValue(new Error('boom'))
+      );
+
+      const { batch, spies } = createMockBatch(
+        [{ handler: 'taskA', content: { value: 'x' }, eventId: 'e1' }],
+        [3] // attempts
+      );
+
+      await backoffQh.getConsumer()(batch, env);
+
+      // 2 ** 3 = 8
+      expect(spies[0].retry).toHaveBeenCalledWith({ delaySeconds: 8 });
+    });
+
+    it('lets a handler override the base with its own retryDelaySeconds', async () => {
+      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+        schema,
+        setContext,
+        createEventId,
+        baseRetryDelaySeconds: 2,
+      });
+      backoffQh.addHandler(
+        'taskA',
+        vi.fn().mockRejectedValue(new Error('boom')),
+        { retryDelaySeconds: 5 }
+      );
+
+      const { batch, spies } = createMockBatch(
+        [{ handler: 'taskA', content: { value: 'x' }, eventId: 'e1' }],
+        [2] // attempts
+      );
+
+      await backoffQh.getConsumer()(batch, env);
+
+      // 5 ** 2 = 25
+      expect(spies[0].retry).toHaveBeenCalledWith({ delaySeconds: 25 });
+    });
+
+    it('calls retry without options when no backoff is configured', async () => {
+      qh.addHandler('taskA', vi.fn().mockRejectedValue(new Error('boom')));
+
+      const { batch, spies } = createMockBatch([
+        { handler: 'taskA', content: { value: 'x' }, eventId: 'e1' },
+      ]);
+
+      await qh.getConsumer()(batch, env);
+
+      expect(spies[0].retry).toHaveBeenCalledWith();
+    });
+
+    it('clamps the delay to the Cloudflare maximum', async () => {
+      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+        schema,
+        setContext,
+        createEventId,
+        baseRetryDelaySeconds: 2,
+      });
+      backoffQh.addHandler(
+        'taskA',
+        vi.fn().mockRejectedValue(new Error('boom'))
+      );
+
+      const { batch, spies } = createMockBatch(
+        [{ handler: 'taskA', content: { value: 'x' }, eventId: 'e1' }],
+        [16] // attempts: 2 ** 16 = 65536, above the 43200 limit
+      );
+
+      await backoffQh.getConsumer()(batch, env);
+
+      expect(spies[0].retry).toHaveBeenCalledWith({
+        delaySeconds: MAX_RETRY_DELAY_SECONDS,
+      });
+    });
+
+    it('applies backoff to parse-failure retries and batch group retries', async () => {
+      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+        schema,
+        setContext,
+        createEventId,
+        baseRetryDelaySeconds: 3,
+      });
+      backoffQh.addHandler(
+        'taskA',
+        async () => {
+          throw new Error('boom');
+        },
+        { processAsBatch: true }
+      );
+
+      const { batch, spies } = createMockBatch(
+        [
+          { handler: 'taskA', content: { value: 'a1' }, eventId: 'e1' },
+          {
+            handler: 'taskA',
+            content: { value: 123 } as unknown as QueueData['content'],
+            eventId: 'e2',
+          },
+        ],
+        [1, 2] // attempts
+      );
+
+      await backoffQh.getConsumer()(batch, env);
+
+      // Parse failure: 3 ** 2 = 9
+      expect(spies[1].retry).toHaveBeenCalledWith({ delaySeconds: 9 });
+      // Group failure: every message retried, 3 ** 1 = 3
+      expect(spies[0].retry).toHaveBeenCalledWith({ delaySeconds: 3 });
     });
   });
 

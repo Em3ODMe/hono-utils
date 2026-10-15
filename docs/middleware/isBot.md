@@ -60,6 +60,7 @@ app.get('/data', (c) => {
 | ------------------ | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `threshold`        | `number`  | `49`        | Scores **below** this value are flagged as bots. (1 = definitely bot, 100 = definitely human).                            |
 | `allowVerifiedBot` | `boolean` | `undefined` | If `true`, bots recognized by Cloudflare's verified list (search engines, etc.) are permitted even if their score is low. |
+| `useLogger`        | `boolean` | `undefined` | When `true`, logs debug/info entries through the request `logger` (registered before this one).                           |
 
 ---
 
@@ -67,7 +68,7 @@ app.get('/data', (c) => {
 
 Cloudflare provides a `botManagement` object within the request's `cf` properties. This middleware evaluates that metadata based on the following logic:
 
-1. **Score Retrieval:** It looks for `cf.botManagement.score`. If unavailable (e.g., in local development without a proxy), it defaults to a safe score of `54`.
+1. **Score Retrieval:** It looks for `cf.botManagement`. If unavailable (e.g. in local development without a Cloudflare proxy), the middleware throws an error. Otherwise, `cf.botManagement.score` is used (falling back to `54` if the score is `undefined`).
 2. **Verification Check:** It checks if the bot is a known, "good" bot (e.g., a search engine crawler).
 3. **Enforcement:**
 

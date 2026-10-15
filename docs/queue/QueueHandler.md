@@ -60,12 +60,12 @@ const logHandler: Handlers['log'] = async (content, { metadata, context }) => {
 export const queueHandler = new QueueHandler({
   setContext,
   schema: QueueSchema,
+  createEventId: () => crypto.randomUUID(),
 })
   .addHandler('email', emailHandler)
   .addHandler('log', logHandler);
 
 export const queue = queueHandler.getConsumer();
-export const producer = queueHandler.getProducer();
 
 export type QueueProducer = ReturnType<typeof queueHandler.getProducer>;
 ```
@@ -74,11 +74,12 @@ export type QueueProducer = ReturnType<typeof queueHandler.getProducer>;
 
 ```TypeScript
 import { Hono } from 'hono'
+import type { Queue } from '@cloudflare/workers-types';
 import { queue } from 'hono-utils';
 import { queueHandler, type QueueProducer } from './queue';
 
 type Env = {
-    Binding: {
+    Bindings: {
         QUEUE: Queue
     },
     Variables: {
@@ -99,7 +100,7 @@ app.get('/email', async (c) => {
         subject: 'Test',
         body: 'Test',
     })
-    return c.text(`Email sent!`)
+    return c.text('Email sent!')
 })
 
 export default app
@@ -127,17 +128,59 @@ export default {
 
 Initializes the handler with validation and context rules.
 
-| Property     | Type        | Description                                                                   |
-| ------------ | ----------- | ----------------------------------------------------------------------------- |
-| `schema`     | `ZodObject` | The Zod schema defining all valid message keys and their payloads.            |
-| `setContext` | `Function`  | A factory function that generates shared resources (DB, config) for handlers. |
+| Property                | Type                | Description                                                                                                                                                              |
+| ----------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema`                | `ZodObject`         | The Zod schema defining all valid message keys and their payloads.                                                                                                       |
+| `setContext`            | `Function`          | A factory function that generates shared resources (DB, config) for handlers.                                                                                            |
+| `createEventId`         | `() => string`      | Factory that generates a unique `eventId` for each produced message (e.g. `() => crypto.randomUUID()`).                                                                  |
+| `baseRetryDelaySeconds` | `number` (Optional) | Base for the exponential backoff applied to every retry (`delaySeconds = base ** attempts`). Individual handlers can override it via `addHandler`'s `retryDelaySeconds`. |
 
-### `.addHandler(handlerName, handler)`
+### `.addHandler(handlerName, handler, options?)`
 
 Registers a processing function for a specific message type. This method is **chainable**.
 
 - **`handlerName`**: A key from your `QueueSchema` (e.g., `'email'`).
 - **`handler`**: An async function that receives the validated `content` and an object containing `context` and `metadata`.
+- **`options.processAsBatch`** (Optional, defaults to `false`): When `true`, the handler receives **all** messages of this type within a consumer batch in a single call.
+- **`options.retryDelaySeconds`** (Optional): Base for the exponential backoff applied when this handler's messages are retried. Overrides the constructor's `baseRetryDelaySeconds` for this handler.
+
+#### Batch handlers (`processAsBatch: true`)
+
+A batch handler is called once per consumer batch with:
+
+1. **`messages`** — an array of items, in batch order, each carrying:
+   - `content` — the Zod-validated message content
+   - `context` — the per-message context resolved by `setContext`, plus that message's `ack`/`retry`
+   - `metadata` — the per-message metadata (`eventId`, `parentEventId`, `language`, ...)
+2. **`batch`** — batch-level info: `queue` (name), `ackAll()`, and `retryAll()`.
+
+```ts
+queueHandler.addHandler(
+  'email',
+  async (messages, batch) => {
+    await sendBulk(messages.map((m) => m.content));
+  },
+  { processAsBatch: true }
+);
+```
+
+**Failure semantics:**
+
+- A message whose content fails schema validation is retried **individually** and excluded from the batch call, so a poison message cannot block the group.
+- If the batch handler throws, **every message in the group is retried** (at-least-once semantics; make batch handlers idempotent).
+- If every message in the group fails validation, the handler is not called.
+
+### Exponential backoff
+
+When a message is retried and a retry delay is configured (constructor `baseRetryDelaySeconds` or the handler's `retryDelaySeconds`), the retry is scheduled with an exponential backoff:
+
+```
+delaySeconds = min(base ** attempts, 43200)
+```
+
+- `attempts` is Cloudflare's `Message.attempts` (1 on the first delivery), so delays grow `base`, `base²`, `base³`, ...
+- The result is clamped to `43200` seconds (Cloudflare's 12-hour maximum), since larger values make `retry()` throw.
+- Without any configured delay, messages are retried immediately (plain `retry()`).
 
 ### `.getConsumer()`
 
@@ -148,14 +191,15 @@ Returns an asynchronous function compatible with the Cloudflare Worker `queue` e
 
 ### `.getProducer(queue, params)`
 
-Generates a typed producer function to push messages into a specific Cloudflare Queue. It automatically generates a unique `eventId` using `cuid2`.
+Generates a typed producer function to push messages into a specific Cloudflare Queue. It automatically generates a unique `eventId` using the constructor's `createEventId` factory.
 
 ---
 
 ## Message Processing Lifecycle
 
 1. **Ingestion:** Cloudflare delivers a `MessageBatch` to the worker.
-2. **Validation:** The `QueueHandler` iterates through messages. It identifies the `handler` key and uses the corresponding Zod sub-schema (e.g., `QueueSchema.shape.email`) to `.parse()` the `content`.
-3. **Context Creation:** `setContext` is invoked to provide the handler with necessary dependencies.
-4. **Execution:** The registered handler is executed.
-5. **Settlement:** All results are settled via `allSettled`. If validation fails or a handler is missing, it logs a warning and moves to the next message.
+2. **Grouping:** The `QueueHandler` groups the batch's messages by their `handler` key, preserving order within each group.
+3. **Validation:** For each message, it uses the corresponding Zod sub-schema (e.g., `QueueSchema.shape.email`) to `.parse()` the `content`. A message that fails validation is retried individually and excluded from the group.
+4. **Context Creation:** `setContext` is invoked to provide the handler with necessary dependencies.
+5. **Execution:** Batch handlers receive the whole group in a single call; otherwise each message runs through its individual handler. All results are settled via `allSettled`.
+6. **Settlement:** If a handler is missing, it logs a warning and acks the message. If a handler throws, the affected message(s) are retried (with backoff, when configured).

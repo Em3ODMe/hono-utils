@@ -7,7 +7,7 @@ The `jsonValidator` is a specialized middleware for **Hono** that utilizes **Zod
 ## Features
 
 - **Type-Safe Payloads:** Automatically infers the TypeScript type of your request body based on the Zod schema.
-- **Prettified Errors:** Uses `z.prettifyError` to return human-readable validation issues instead of raw JSON error arrays.
+- **Compact Errors:** Uses `formatZodError` to return human-readable validation issues as a `prop: message` list instead of raw JSON error arrays.
 - **Automatic Rejection:** Immediately terminates requests with a `400 Bad Request` if they do not match the expected schema.
 - **Seamless Hono Integration:** Built on top of Hono's native `validator` utility for native performance and compatibility.
 
@@ -62,12 +62,12 @@ If a user submits a string for an `age` field that expects a number, the respons
 
 ```json
 {
-  "message": "Error: Expected number, received string at \"age\""
+  "message": "age: Expected number, received string"
 }
 ```
 
 > [!TIP]
-> **Prettified Errors:** This middleware uses `z.prettifyError(parsed.error)`. This is particularly useful for frontend developers because it converts Zod's complex nested error objects into a concise, readable string.
+> **Compact Errors:** This middleware uses `formatZodError(parsed.error)`, which formats each issue as `path: message`. This is particularly useful for frontend developers because it converts Zod's complex nested error objects into a concise, readable string.
 
 ---
 

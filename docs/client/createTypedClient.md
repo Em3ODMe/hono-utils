@@ -1,10 +1,8 @@
-Here is the documentation for the provided code snippet, formatted according to your requirements.
+# Hono RPC Client Wrapper
 
-This utility acts as a **Client-Side Wrapper** (or interceptor) for Hono's RPC client (`hc`), adding lifecycle hooks and standardized error handling.
+`createTypedClient` acts as a **Client-Side Wrapper** (or interceptor) for Hono's RPC client (`hc`), adding lifecycle hooks and standardized error handling.
 
 ---
-
-# Hono RPC Client Wrapper
 
 ## Features
 
@@ -13,6 +11,8 @@ This utility acts as a **Client-Side Wrapper** (or interceptor) for Hono's RPC c
 - **Automated Parsing:** Uses Hono's `parseResponse` to automatically handle JSON/Text parsing and validate `response.ok`.
 - **Standardized Error Handling:** Catches fetch errors and non-200 responses, normalizing them into `HTTPException` objects.
 - **Dynamic Headers:** Supports both static headers and async functions for dynamic header injection (e.g., retrieving fresh auth tokens).
+
+---
 
 ## Usage
 
@@ -35,7 +35,7 @@ export default app;
 
 ### 2. Apply Wrapper
 
-Initialize the client and wrap your RPC calls using the `rpcClient` instance.
+Create the RPC client with `createTypedClient<AppType>()(options)`, then call it with a function that performs the request using the raw `hc` client. Lifecycle callbacks are passed as the second argument.
 
 ```typescript
 // client.ts
@@ -43,24 +43,24 @@ import { createTypedClient } from 'hono-utils/client';
 import type { AppType } from './server'; // Import type from server
 
 // Initialize the client
-const rpcClient = createTypedClient<AppType>({
+const rpcClient = createTypedClient<AppType>()({
   url: 'http://localhost:3000',
   headers: {
     Authorization: 'Bearer token...',
-  },
-  callbacks: {
-    onStart: () => console.log('Fetching...'),
-    onSuccess: () => console.log('Done!'),
-    onError: (err) => console.error('Failed', err),
-    onEnd: () => console.log('Request finished'),
   },
 });
 
 // Usage example inside a function
 async function getUsers() {
   try {
-    // Usage: Pass a function that uses the raw 'client'
-    const users = await rpcClient((client) => client.users.$get());
+    // First argument: a function that uses the raw 'client'
+    // Second argument (optional): lifecycle callbacks
+    const users = await rpcClient((client) => client.users.$get(), {
+      onStart: () => console.log('Fetching...'),
+      onSuccess: (data, headers) => console.log('Done!', data),
+      onError: (data, headers) => console.error('Failed', data),
+      onEnd: () => console.log('Request finished'),
+    });
     console.log(users);
   } catch (error) {
     // Errors are thrown as HTTPExceptions
@@ -69,16 +69,23 @@ async function getUsers() {
 }
 ```
 
+---
+
 ## Configuration
 
-The `createTypedClient` function accepts an options object with the following properties:
+The `createTypedClient` function returns a factory that accepts an options object:
 
-| Property        | Type                     | Description                                                              |
-| --------------- | ------------------------ | ------------------------------------------------------------------------ |
-| **`url`**       | `string`                 | The base URL of your Hono server.                                        |
-| **`headers`**   | `Record<string, string>` | `() => Promise<Record>`                                                  |
-| **`fetch`**     | `typeof fetch`           | (Optional) Custom fetch implementation (e.g., for Node.js environments). |
-| **`callbacks`** | `TypedClientCallbacks`   | (Optional) Lifecycle hooks for request management.                       |
+| Property           | Type                                                                                                  | Description                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **`url`**          | `string`                                                                                              | The base URL of your Hono server.                                                 |
+| **`headers`**      | `Record<string, string>` \| `() => Record<string, string>` \| `() => Promise<Record<string, string>>` | Static headers or a (possibly async) function for dynamic headers.                |
+| **`fetch`**        | `typeof fetch`                                                                                        | (Optional) Custom fetch implementation (e.g., for Node.js environments).          |
+| **`errorHandler`** | `(status, body?) => never`                                                                            | (Optional) Called before an error is thrown, with the status code and error body. |
+
+The returned RPC client accepts:
+
+1. **`fn`** — a function receiving the raw `hc` client and returning a `ClientResponse`.
+2. **`callbacks`** (Optional) — lifecycle hooks.
 
 ### Callback Interfaces
 
@@ -86,16 +93,17 @@ The `callbacks` object supports the following methods:
 
 - **`onStart()`**: Triggered immediately before the request is made.
 - **`onSuccess(parsedData, headers)`**: Triggered after successful parsing and a 2xx status code.
-- **`onError(parsedData, headers)`**: Triggered when a `DetailedError` occurs or parsing fails.
+- **`onError(parsedData, headers)`**: Triggered when a `DetailedError` occurs (i.e. a non-2xx response with a parsed body).
 - **`onEnd()`**: Triggered inside the `finally` block (runs regardless of success or failure).
-- **`errorHandler(status, body)`**: A specialized handler that receives the status code and error body before the exception is thrown.
+
+---
 
 ## Technical Considerations
 
 - **Hono Client (`hc`) Dependency:** This wrapper relies on `hono/client`. It specifically uses `parseResponse`, which automatically throws a `DetailedError` if the response status is not in the 200 range.
 - **Exception Propagation:**
-- If the fetch fails or returns a 4xx/5xx error, the wrapper catches the internal `DetailedError`.
-- It then re-throws a standard **`HTTPException`**. This allows you to use `try/catch` blocks in your UI logic to handle specific status codes (e.g., redirecting on 401).
+  - If the fetch fails or returns a 4xx/5xx error, the wrapper catches the internal `DetailedError`.
+  - It then re-throws a standard **`HTTPException`**. This allows you to use `try/catch` blocks in your UI logic to handle specific status codes (e.g., redirecting on 401).
 
 - **Header Handling:** The wrapper captures response headers and passes them to both `onSuccess` and `onError` callbacks, allowing you to read metadata (like pagination or rate limits) from headers even on failure.
 - **Malformed Responses:** If the server returns an error without a detail body (or if parsing fails completely), the wrapper creates a generic `500 Fetch malformed` error to prevent silent failures.

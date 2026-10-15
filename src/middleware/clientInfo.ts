@@ -4,9 +4,6 @@ import type {
   Iso3166Alpha2Code,
   ContinentCode,
 } from '@cloudflare/workers-types';
-import { SHA } from '../crypto';
-import { MiddlewareWithLoggingCapability } from './types';
-import { Logger } from 'hierarchical-area-logger';
 import { HonoLoggerVariables } from './logger';
 
 type CFData = {
@@ -58,13 +55,14 @@ export type HonoClientInfoVariables = {
  * into the request context, including geolocation data from Cloudflare and
  * parsed User-Agent details.
  * @param {Object} [config] - Optional configuration for the middleware.
- * @param {Function} [config.securityHashString] - A custom function to generate the seed string
+ * @param {Function} [config.createSecurityHashString] - A custom function to generate the seed string
  * used for the security hash. Receives Cloudflare and User-Agent data as input.
- * Defaults to `${city}${country}${continent}`.
+ * When not provided, `securityHash` is set to `'unset'`.
  * @param {string} [config.hashSecretBinding] - The name of the environment variable
  * containing the hash secret. Defaults to 'HASH_SECRET'.
  * @returns {MiddlewareHandler} A Hono middleware handler.
  * @throws {Error} Throws an error if Cloudflare (`req.raw.cf`) data is missing.
+ * @throws {Error} Throws an error if the `CF-Connecting-IP` header or the hash secret is unavailable.
  * @example
  * ```ts
  * const app = new Hono<{ Variables: HonoClientInfoVariables }>();
@@ -82,25 +80,20 @@ export type HonoClientInfoVariables = {
  * });
  * ```
  */
-export const clientInfo: MiddlewareWithLoggingCapability<{
+export const clientInfo = (config?: {
+  useLogger?: boolean;
   hashSecretBinding?: string;
-  securityHashString?: (
-    content: CFData & UserAgentData & { ip: string }
-  ) => string;
-}> = (config) =>
+  createSecurityHashString?: (
+    content: CFData & UserAgentData & { ip: string },
+    bindings: Record<string, unknown>
+  ) => Promise<string>;
+}) =>
   createMiddleware<{
     Bindings: Record<string, string>;
     Variables: HonoClientInfoVariables & HonoLoggerVariables;
   }>(async ({ env, req, set, get }, next) => {
     const logger = config?.useLogger
-      ? (
-          get('logger') ??
-          new Logger({
-            details: {
-              service: 'dummy',
-            },
-          })
-        ).getArea('middeware:clientInfo')
+      ? get('logger')?.getArea('middleware:clientInfo')
       : undefined;
 
     if (!req.raw.cf) {
@@ -175,8 +168,11 @@ export const clientInfo: MiddlewareWithLoggingCapability<{
     };
 
     logger?.debug('Getting ip address');
-    const ip =
-      (req.raw.headers.get('CF-Connecting-IP') as string) ?? '127.0.0.1';
+    const ip = req.raw.headers.get('CF-Connecting-IP');
+
+    if (!ip) {
+      throw new Error('Connecting IP is not available');
+    }
 
     const clientContent = { ...cf, ...ua, ip };
 
@@ -184,13 +180,9 @@ export const clientInfo: MiddlewareWithLoggingCapability<{
     set('client', {
       ...clientContent,
       userAgent,
-      securityHash: await SHA.hash({
-        input:
-          config?.securityHashString?.(clientContent) ??
-          `${ip}${city}${country}${userAgent}`,
-        algorithm: 'SHA-512',
-        pepper: hashSecret,
-      }),
+      securityHash: config?.createSecurityHashString
+        ? await config?.createSecurityHashString(clientContent, env)
+        : 'unset',
     });
     logger?.info('Client data variable set');
     await next();

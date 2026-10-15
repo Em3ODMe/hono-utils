@@ -14,6 +14,12 @@ const translations = {
       name: 'town',
     },
     world: 'Hello {{name}}',
+    onlyEn: 'only-en',
+    partial: {
+      missing: 'fallback-en',
+    },
+    special: 'Value {{a.b}}',
+    overmatch: '{{axb}}',
   },
   fr: {
     hello: 'bonjour',
@@ -21,13 +27,14 @@ const translations = {
       name: 'ville',
     },
     world: 'Hello {{name}}',
+    partial: {},
   },
 } as const;
 
 const { middleware, queue } = i18n(translations, 'en');
 
 type Env = {
-  Variables: HonoI18nVariables & HonoLanguageVariables;
+  Variables: HonoI18nVariables<typeof translations> & HonoLanguageVariables;
 };
 
 describe(i18n.name, () => {
@@ -72,6 +79,26 @@ describe(i18n.name, () => {
       expect(res.status).toBe(200);
       expect(await res.text()).toBe('bonjour');
     });
+    it('should interpolate params in middleware mode', async () => {
+      app.get('/test', middleware, async (c) => {
+        return c.text(c.var.t('world', { name: 'User' }));
+      });
+
+      const res = await app.request('/test');
+
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe('Hello User');
+    });
+    it('should fall back to the default language for a nested key', async () => {
+      app.get('/test', middleware, async (c) => {
+        return c.text(c.var.t('partial.missing'));
+      });
+
+      const res = await app.request('/test');
+
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe('fallback-en');
+    });
   });
 
   describe('should success with queue', () => {
@@ -103,6 +130,7 @@ describe(i18n.name, () => {
     it('should success with nested key', async () => {
       const translation = queue();
 
+      // @ts-expect-error - intentionally missing key to exercise runtime fallback
       expect(translation('town.not-exist')).toBe('town.not-exist');
     });
     it('should success with variable', async () => {
@@ -119,6 +147,32 @@ describe(i18n.name, () => {
       const translation = queue();
 
       expect(translation('world', { wrong: 'world' })).toBe('Hello {{name}}');
+    });
+    it('should fall back to the default language when the active language misses the leaf', async () => {
+      const translation = queue('fr');
+
+      expect(translation('partial.missing')).toBe('fallback-en');
+    });
+    it('should fall back to the default language when the active language misses the whole path', async () => {
+      const translation = queue('fr');
+
+      expect(translation('onlyEn')).toBe('only-en');
+    });
+    it('should return the raw input when the key is missing in both languages', async () => {
+      const translation = queue('fr');
+
+      // @ts-expect-error - intentionally missing key to exercise runtime fallback
+      expect(translation('town.not-exist')).toBe('town.not-exist');
+    });
+    it('should interpolate a param key containing regex metacharacters', async () => {
+      const translation = queue();
+
+      expect(translation('special', { 'a.b': 'world' })).toBe('Value world');
+    });
+    it('should not over-match placeholders when a param key contains metacharacters', async () => {
+      const translation = queue();
+
+      expect(translation('overmatch', { 'a.b': 'world' })).toBe('{{axb}}');
     });
   });
 });

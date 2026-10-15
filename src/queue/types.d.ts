@@ -30,6 +30,34 @@ export type MessageHandlers<QueueData extends DataShape, Context> = {
   [Term in keyof QueueData]: Handler<QueueData[Term], Variables<Context>>;
 };
 
+/**
+ * A single message passed to a batch handler, carrying the parsed content
+ * together with its per-message context and metadata (eventId, ...).
+ */
+export interface BatchMessage<Content, Context> {
+  content: Content;
+  context: Variables<Context>['context'];
+  metadata: Variables<Context>['metadata'];
+}
+
+/**
+ * Batch-level information passed to a batch handler: the queue name and the
+ * batch-wide ack/retry controls.
+ */
+export interface BatchInfo {
+  queue: string;
+  ackAll: () => void;
+  retryAll: () => void;
+}
+
+/**
+ * A handler registered with `{ processAsBatch: true }`: all messages of its
+ * handler name within a consumer batch are passed in a single call.
+ */
+export interface BatchHandler<Content, Context> {
+  (messages: BatchMessage<Content, Context>[], batch: BatchInfo): Promise<void>;
+}
+
 export interface ContextFn<Environment, Context> {
   (
     env: Environment,
