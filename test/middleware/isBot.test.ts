@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { isBot, type HonoIsBotVariables } from '@/middleware/isBot';
+import { logger, type HonoLoggerVariables } from '@/middleware/logger';
 import { createMiddlewareTester } from '../utils';
 
 type Env = {
@@ -163,6 +164,43 @@ describe(isBot.name, () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('with useLogger', () => {
+    type LoggedEnv = {
+      Variables: HonoIsBotVariables & HonoLoggerVariables;
+    };
+
+    it('should log to the middleware:isBot area and still detect bots', async () => {
+      const loggedApp = createMiddlewareTester<LoggedEnv>(
+        undefined,
+        logger({ details: { instance: 'isBot' } })
+      );
+
+      loggedApp.get('/test', isBot({ threshold: 49, useLogger: true }), (c) => {
+        const area = c.var.logger.retrieveAreaEvents('middleware:isBot');
+        return c.json({
+          isBot: c.get('isBot'),
+          messages: area.map((entry) => entry.message),
+        });
+      });
+
+      const req = createRequestWithBotManagement({
+        score: 100,
+        verifiedBot: false,
+      });
+      const res = await loggedApp.fetch(req);
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        isBot: false,
+        messages: [
+          'Retrieving bot management data from cloudflare data',
+          'Setting isBot variable in context',
+          'isBot variable set',
+        ],
+      });
     });
   });
 });

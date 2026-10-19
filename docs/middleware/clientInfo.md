@@ -10,6 +10,7 @@ The `clientInfo` middleware for [Hono](https://hono.dev/) is a robust utility de
 - **User-Agent Parsing:** Utilizes `ua-parser-js` to break down the browser, OS, device type, and CPU architecture.
 - **Custom Security Hash:** Generates a `securityHash` via a user-supplied `createSecurityHashString` callback (defaults to `'unset'` when not provided).
 - **Hono Integration:** Injects all data into the Hono context (`c.get('client')`) with full TypeScript support.
+- **Optional Logging:** With `useLogger: true`, writes debug/info entries to the `middleware:clientInfo` area via [`withLogger`](withLogger.md).
 
 ---
 
@@ -52,17 +53,29 @@ app.get('/debug', (c) => {
 });
 ```
 
+### 3. Logging
+
+Pass `useLogger: true` to log through the request logger. Logs are scoped to the `middleware:clientInfo` area, and the `logger` middleware must be registered first (otherwise `withLogger` throws).
+
+```typescript
+import { logger, clientInfo } from 'hono-utils';
+
+app.use('*', logger({ details: { instance: 'api' } }));
+
+app.use('*', clientInfo({ useLogger: true }));
+```
+
 ---
 
 ## Configuration
 
 The `clientInfo` function accepts an optional configuration object:
 
-| Option                     | Type                                     | Default         | Description                                                                                                      |
-| -------------------------- | ---------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `useLogger`                | `boolean`                                | `undefined`     | When `true`, logs debug/info entries through the request `logger` (registered before this one).                  |
-| `hashSecretBinding`        | `string`                                 | `'HASH_SECRET'` | The key in your `env` that holds the hash secret. The middleware throws if it is missing.                        |
-| `createSecurityHashString` | `(content, bindings) => Promise<string>` | `undefined`     | A custom async callback that returns the `securityHash` value. When omitted, `securityHash` is set to `'unset'`. |
+| Option                     | Type                                     | Default         | Description                                                                                                                                                              |
+| -------------------------- | ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `useLogger`                | `boolean`                                | `undefined`     | When `true`, writes debug/info entries to the `middleware:clientInfo` area via `withLogger`. Requires the `logger` middleware to be registered first (throws otherwise). |
+| `hashSecretBinding`        | `string`                                 | `'HASH_SECRET'` | The key in your `env` that holds the hash secret. The middleware throws if it is missing.                                                                                |
+| `createSecurityHashString` | `(content, bindings) => Promise<string>` | `undefined`     | A custom async callback that returns the `securityHash` value. When omitted, `securityHash` is set to `'unset'`.                                                         |
 
 ### Custom Security Hash Example
 

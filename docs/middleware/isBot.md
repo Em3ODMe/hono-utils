@@ -10,6 +10,7 @@ The `isBot` middleware provides a security layer for **Hono** applications runni
 - **Verified Bot Pass:** Optionally allows known "good bots" (like Googlebot or Bingbot) to bypass blocks regardless of score.
 - **Contextual Tagging:** Sets an `isBot` boolean in the Hono context for downstream logging or logic.
 - **Automatic Blocking:** Immediately throws an `HTTPException (401)` if a request fails the security criteria.
+- **Optional Logging:** With `useLogger: true`, writes debug/info entries to the `middleware:isBot` area via [`withLogger`](withLogger.md).
 
 ---
 
@@ -52,15 +53,27 @@ app.get('/data', (c) => {
 });
 ```
 
+### 3. Logging
+
+Pass `useLogger: true` to log through the request logger. Logs are scoped to the `middleware:isBot` area, and the `logger` middleware must be registered first (otherwise `withLogger` throws).
+
+```typescript
+import { logger, isBot } from 'hono-utils';
+
+app.use('*', logger({ details: { instance: 'api' } }));
+
+app.use('/api/secure/*', isBot({ threshold: 80, useLogger: true }));
+```
+
 ---
 
 ## Configuration
 
-| Option             | Type      | Default     | Description                                                                                                               |
-| ------------------ | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `threshold`        | `number`  | `49`        | Scores **below** this value are flagged as bots. (1 = definitely bot, 100 = definitely human).                            |
-| `allowVerifiedBot` | `boolean` | `undefined` | If `true`, bots recognized by Cloudflare's verified list (search engines, etc.) are permitted even if their score is low. |
-| `useLogger`        | `boolean` | `undefined` | When `true`, logs debug/info entries through the request `logger` (registered before this one).                           |
+| Option             | Type      | Default     | Description                                                                                                                                                         |
+| ------------------ | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `threshold`        | `number`  | `49`        | Scores **below** this value are flagged as bots. (1 = definitely bot, 100 = definitely human).                                                                      |
+| `allowVerifiedBot` | `boolean` | `undefined` | If `true`, bots recognized by Cloudflare's verified list (search engines, etc.) are permitted even if their score is low.                                           |
+| `useLogger`        | `boolean` | `undefined` | When `true`, writes debug/info entries to the `middleware:isBot` area via `withLogger`. Requires the `logger` middleware to be registered first (throws otherwise). |
 
 ---
 

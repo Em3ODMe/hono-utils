@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-10-19
+
+### Added
+
+- **`withLogger` middleware wrapper** (`src/middleware/withLogger.ts`). Wraps a middleware implementation with logging capability, scoping the request logger to a `middleware:${name}` area and passing the scoped log methods (`info`/`warn`/`error`/`log`/`debug`) along with the request `eventId` and bound `dump`/`dumpFlat` helpers. Requires the `logger` middleware to be registered first (throws otherwise).
+- **`logger` middleware `eventIdHeader` option.** Returns the request `eventId` to the client through a response header, defaulting to `x-event-id`.
+- **`withLogger` documentation** (`docs/middleware/withLogger.md`).
+
+### Changed
+
+- **`isBot` and `clientInfo` logging via `withLogger`.** With `useLogger: true`, they now log through `withLogger` into the `middleware:isBot` / `middleware:clientInfo` areas and throw if the `logger` middleware has not run first (previously logging was silently skipped).
+- **`response` middleware is now a direct handler.** It no longer accepts options and is registered as `response` instead of `response()`.
+
+### Removed
+
+- **`response` middleware `eventIdHeader` option.** Tracing headers are now set by the `logger` middleware's `eventIdHeader` option.
+
 ## [0.7.1] - 2026-10-19
 
 ### Added
@@ -47,5 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`@paralleldrive/cuid2` dependency.** Event IDs are now generated via the configurable `createEventId` (defaulting to `crypto.randomUUID()`).
 - **`MiddlewaredWithLoggingCapability` fallback loggers.** The "dummy" logger fallbacks in `clientInfo` and `isBot` were removed in favor of the real request logger.
 
+[0.7.2]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.2
 [0.7.1]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.1
 [0.7.0]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.0

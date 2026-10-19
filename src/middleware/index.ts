@@ -6,4 +6,5 @@ export * from './queue';
 export * from './response';
 export * from './clientInfo';
 export * from './queryValidator';
+export * from './withLogger';
 export type { MiddlewareWithLoggingCapability } from './types';

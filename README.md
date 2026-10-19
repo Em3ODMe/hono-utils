@@ -72,6 +72,7 @@ import { formatZodError, getSecretValue } from 'hono-utils';
   - [logger](docs/middleware/logger.md)
   - [queue](docs/middleware/queue.md)
   - [response](docs/middleware/response.md)
+  - [withLogger](docs/middleware/withLogger.md)
 
 - Queue
   - [QueueHandler](docs/queue/QueueHandler.md)

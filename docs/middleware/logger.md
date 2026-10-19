@@ -11,6 +11,7 @@ The `logger` middleware integrates the [`hierarchical-area-logger`](https://gith
 - **Contextual Injection:** Attaches a unique `logger` instance and `eventId` to the Hono context for use in handlers.
 - **Structured Metadata:** Injects global service details (e.g., service name, environment) into every log entry.
 - **Environment-driven configuration:** Every option can be resolved per request from runtime bindings (`c.env`) and from context variables set by middleware registered before the logger.
+- **Tracing Response Header:** Returns the request `eventId` to the client through a response header (`eventIdHeader`, defaults to `x-event-id`), so client error reports can be correlated with server logs.
 
 ---
 
@@ -60,6 +61,7 @@ app.get('/users/:id', async (c) => {
 | `parentEventIdHeader` | `string` (Optional)                                                                            | The name of the incoming header (e.g., `x-trace-id`) used to link logs to a parent process.                 |
 | `createEventId`       | `(details, context) => string \| Promise<string>` (Optional)                                   | Factory that creates the event ID for the logging session. Defaults to `crypto.randomUUID()`. May be async. |
 | `dumpOptions`         | `DumpLoggerOptions \| (context) => DumpLoggerOptions \| Promise<DumpLoggerOptions>` (Optional) | Default options applied on every `logger.dump()` (`omitRoot`, `finalizeLog`, `excludeLogTypes`).            |
+| `eventIdHeader`       | `string` (Optional)                                                                            | Response header name that carries the request `eventId` back to the client. Defaults to `x-event-id`.       |
 
 Any option that accepts a factory (function) is **re-evaluated on every request**, which is the recommended way to configure the logger from the environment. The factory receives a resolve context:
 
@@ -122,12 +124,26 @@ app.use(
 );
 ```
 
+### Tracing Response Header
+
+The `logger` middleware returns the request `eventId` to the client via the `x-event-id` response header, so a failing request can be correlated with its logs. Override the header name with `eventIdHeader`:
+
+```typescript
+app.use(
+  '*',
+  logger({
+    details: { instance: 'api-gateway' },
+    eventIdHeader: 'x-request-id',
+  })
+);
+```
+
 ---
 
 ## How It Works
 
 1. **Trace Correlation:** If `parentEventIdHeader` is provided, the middleware checks the request headers. If found, the new logger instance becomes a child of that parent ID, preserving the trace chain. If expected but missing, an error entry is logged.
-2. **Unique Identity:** Every request gets a unique `eventId` (accessible via `c.var.eventId`). This ID should be returned in response headers or logged to allow for easy debugging of specific requests.
+2. **Unique Identity:** Every request gets a unique `eventId` (accessible via `c.var.eventId`), which is returned to the client through the `x-event-id` response header (unless overridden with `eventIdHeader`).
 3. **Area Detection:** The logger is initialized with the request pathname. In hierarchical logging, the "Area" helps categorize where the log occurred (e.g., `/v1/auth/login`).
 4. **Lifecycle:** The logger is instantiated at the start of the request and persists until the response is sent, ensuring all logs within that request share the same metadata.
 
@@ -147,11 +163,14 @@ If Service A calls Service B:
 ---
 
 > [!TIP]
-> **Response Headers:** It is a best practice to send the `eventId` back to the client in a header. This allows users to provide a "Reference ID" if they encounter an error, which you can then look up instantly in your logs.
+> **Response Headers:** The `logger` middleware returns the `eventId` to the client via the `x-event-id` header automatically, so users can provide a "Reference ID" when they encounter an error. Override the header name with the `eventIdHeader` option:
 >
 > ```typescript
-> app.use('*', async (c, next) => {
->   await next();
->   c.header('x-event-id', c.var.eventId);
-> });
+> app.use(
+>   '*',
+>   logger({
+>     details: { instance: 'api-gateway' },
+>     eventIdHeader: 'x-request-id',
+>   })
+> );
 > ```

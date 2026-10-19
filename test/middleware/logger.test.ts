@@ -129,6 +129,37 @@ describe(logger.name, () => {
     expect(await res.json()).toEqual({ eventId: 'async-event-id' });
   });
 
+  it('should set the eventId response header when eventIdHeader is configured', async () => {
+    const app = createMiddlewareTester<Env>(
+      undefined,
+      logger({
+        details,
+        createEventId: () => 'custom-event-id',
+        eventIdHeader: 'x-request-id',
+      })
+    );
+    app.get('/test', (c) => c.json({ eventId: c.var.eventId }));
+
+    const res = await app.request('/test');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ eventId: 'custom-event-id' });
+    expect(res.headers.get('x-request-id')).toBe('custom-event-id');
+  });
+
+  it('should default to the x-event-id header when eventIdHeader is omitted', async () => {
+    const app = createMiddlewareTester<Env>(
+      undefined,
+      logger({ details, createEventId: () => 'custom-event-id' })
+    );
+    app.get('/test', (c) => c.json({ eventId: c.var.eventId }));
+
+    const res = await app.request('/test');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-event-id')).toBe('custom-event-id');
+  });
+
   it('should resolve details and dump options from bindings per request', async () => {
     const app = createMiddlewareTester<Env>(
       undefined,

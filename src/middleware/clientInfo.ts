@@ -1,10 +1,12 @@
 import { createMiddleware } from 'hono/factory';
 import { UAParser } from 'ua-parser-js';
+import type { Context } from 'hono';
 import type {
   Iso3166Alpha2Code,
   ContinentCode,
 } from '@cloudflare/workers-types';
 import { HonoLoggerVariables } from './logger';
+import { withLogger, type LoggerFunctions } from './withLogger';
 
 type CFData = {
   isEUCountry: boolean;
@@ -50,11 +52,130 @@ export type HonoClientInfoVariables = {
   } & UserAgentData;
 };
 
+type ClientInfoEnv = {
+  Bindings: Record<string, string>;
+  Variables: HonoClientInfoVariables & HonoLoggerVariables;
+};
+
+type ClientInfoConfig = {
+  useLogger?: boolean;
+  hashSecretBinding?: string;
+  createSecurityHashString?: (
+    content: CFData & UserAgentData & { ip: string },
+    bindings: Record<string, unknown>
+  ) => Promise<string>;
+};
+
+/**
+ * Shared extraction logic. `logger` is `undefined` when logging is disabled
+ * (`useLogger: false`), in which case every log call is a no-op.
+ */
+const extractClientInfo = async (
+  c: Context<ClientInfoEnv>,
+  logger: LoggerFunctions | undefined,
+  config: ClientInfoConfig | undefined
+): Promise<void> => {
+  const { env, req, set } = c;
+
+  if (!req.raw.cf) {
+    throw new Error('Cloudflare data is not available');
+  }
+
+  logger?.debug('Retrieving hash secret from environment');
+  const hashSecret = env[config?.hashSecretBinding ?? 'HASH_SECRET'] as
+    string | undefined;
+
+  if (!hashSecret) {
+    throw new Error('Hash secret is not available');
+  }
+
+  const {
+    latitude,
+    longitude,
+    city,
+    country,
+    continent,
+    colo,
+    asn,
+    isEUCountry,
+    region,
+    regionCode,
+    postalCode,
+    timezone,
+  } = req.raw.cf as CFData;
+
+  logger?.debug('Forming cloudflare client data object');
+  const cf = {
+    latitude,
+    longitude,
+    city,
+    country,
+    continent,
+    colo,
+    asn,
+    isEUCountry: Boolean(isEUCountry),
+    region,
+    regionCode,
+    postalCode,
+    timezone,
+  };
+
+  logger?.debug('Parsing user agent');
+  const userAgent = req.raw.headers.get('user-agent') ?? 'Unknown';
+  const parser = new UAParser(userAgent);
+  const userAgentParsed = parser.getResult();
+
+  const { browser, device, engine, os, cpu } = userAgentParsed;
+
+  const ua = {
+    browser: {
+      name: browser.name ?? 'Unknown',
+      version: browser.version ?? 'Unknown',
+    },
+    device: {
+      model: device.model ?? 'Unknown',
+      vendor: device.vendor ?? 'Unknown',
+      type: device.type ?? 'desktop',
+    },
+    engine: {
+      name: engine.name ?? 'Unknown',
+      version: engine.version ?? 'Unknown',
+    },
+    os: {
+      name: os.name ?? 'Unknown',
+      version: os.version ?? 'Unknown',
+    },
+    cpu: cpu.architecture ?? 'Unknown',
+  };
+
+  logger?.debug('Getting ip address');
+  const ip = req.raw.headers.get('CF-Connecting-IP');
+
+  if (!ip) {
+    throw new Error('Connecting IP is not available');
+  }
+
+  const clientContent = { ...cf, ...ua, ip };
+
+  logger?.debug('Setting client data into context');
+  set('client', {
+    ...clientContent,
+    userAgent,
+    securityHash: config?.createSecurityHashString
+      ? await config?.createSecurityHashString(clientContent, env)
+      : 'unset',
+  });
+  logger?.info('Client data variable set');
+};
+
 /**
  * Hono middleware that extracts and injects comprehensive client information
  * into the request context, including geolocation data from Cloudflare and
  * parsed User-Agent details.
  * @param {Object} [config] - Optional configuration for the middleware.
+ * @param {boolean} [config.useLogger] - When true, the middleware logs through
+ * the request logger via `withLogger`. Requires the `logger` middleware to be
+ * registered first.
  * @param {Function} [config.createSecurityHashString] - A custom function to generate the seed string
  * used for the security hash. Receives Cloudflare and User-Agent data as input.
  * When not provided, `securityHash` is set to `'unset'`.
@@ -80,110 +201,15 @@ export type HonoClientInfoVariables = {
  * });
  * ```
  */
-export const clientInfo = (config?: {
-  useLogger?: boolean;
-  hashSecretBinding?: string;
-  createSecurityHashString?: (
-    content: CFData & UserAgentData & { ip: string },
-    bindings: Record<string, unknown>
-  ) => Promise<string>;
-}) =>
-  createMiddleware<{
-    Bindings: Record<string, string>;
-    Variables: HonoClientInfoVariables & HonoLoggerVariables;
-  }>(async ({ env, req, set, get }, next) => {
-    const logger = config?.useLogger
-      ? get('logger')?.getArea('middleware:clientInfo')
-      : undefined;
+export const clientInfo = (config?: ClientInfoConfig) => {
+  if (config?.useLogger) {
+    return withLogger<ClientInfoEnv>('clientInfo', (c, logger) =>
+      extractClientInfo(c, logger, config)
+    );
+  }
 
-    if (!req.raw.cf) {
-      throw new Error('Cloudflare data is not available');
-    }
-
-    logger?.debug('Retrieving hash secret from environment');
-    const hashSecret = env[config?.hashSecretBinding ?? 'HASH_SECRET'] as
-      string | undefined;
-
-    if (!hashSecret) {
-      throw new Error('Hash secret is not available');
-    }
-
-    const {
-      latitude,
-      longitude,
-      city,
-      country,
-      continent,
-      colo,
-      asn,
-      isEUCountry,
-      region,
-      regionCode,
-      postalCode,
-      timezone,
-    } = req.raw.cf as CFData;
-
-    logger?.debug('Forming cloudflare client data object');
-    const cf = {
-      latitude,
-      longitude,
-      city,
-      country,
-      continent,
-      colo,
-      asn,
-      isEUCountry: Boolean(isEUCountry),
-      region,
-      regionCode,
-      postalCode,
-      timezone,
-    };
-
-    logger?.debug('Parsing user agent');
-    const userAgent = req.raw.headers.get('user-agent') ?? 'Unknown';
-    const parser = new UAParser(userAgent);
-    const userAgentParsed = parser.getResult();
-
-    const { browser, device, engine, os, cpu } = userAgentParsed;
-
-    const ua = {
-      browser: {
-        name: browser.name ?? 'Unknown',
-        version: browser.version ?? 'Unknown',
-      },
-      device: {
-        model: device.model ?? 'Unknown',
-        vendor: device.vendor ?? 'Unknown',
-        type: device.type ?? 'desktop',
-      },
-      engine: {
-        name: engine.name ?? 'Unknown',
-        version: engine.version ?? 'Unknown',
-      },
-      os: {
-        name: os.name ?? 'Unknown',
-        version: os.version ?? 'Unknown',
-      },
-      cpu: cpu.architecture ?? 'Unknown',
-    };
-
-    logger?.debug('Getting ip address');
-    const ip = req.raw.headers.get('CF-Connecting-IP');
-
-    if (!ip) {
-      throw new Error('Connecting IP is not available');
-    }
-
-    const clientContent = { ...cf, ...ua, ip };
-
-    logger?.debug('Setting client data into context');
-    set('client', {
-      ...clientContent,
-      userAgent,
-      securityHash: config?.createSecurityHashString
-        ? await config?.createSecurityHashString(clientContent, env)
-        : 'unset',
-    });
-    logger?.info('Client data variable set');
+  return createMiddleware<ClientInfoEnv>(async (c, next) => {
+    await extractClientInfo(c, undefined, config);
     await next();
   });
+};

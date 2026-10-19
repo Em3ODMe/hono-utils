@@ -80,3 +80,5 @@ Fix failures in your own change rather than leaving them for CI. Husky runs
 - `git push` and `npm publish` are ask-before-use operations.
 - When bumping the version, update `package.json` `version`, add an entry to
   `CHANGELOG.md` (Keep a Changelog format), and keep the release commit minimal.
+- After writing a `CHANGELOG.md` release entry, bump the `package.json`
+  `version` to match it in the same change.

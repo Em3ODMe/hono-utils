@@ -90,6 +90,8 @@ export type LoggerConfig<
  * `crypto.randomUUID()`; may be async)
  * @param [config.dumpOptions] - Default options for `logger.dump()` (static
  * or resolved from bindings and variables)
+ * @param [config.eventIdHeader] - Response header name that carries the
+ * request `eventId` back to the client (defaults to `x-event-id`)
  *
  * @example
  * ```ts
@@ -110,7 +112,7 @@ export const logger = <
   E extends LoggerEnvironment = LoggerEnvironment,
   AdditionalDetails extends Record<string, unknown> = Record<string, unknown>,
 >(
-  config: LoggerConfig<AdditionalDetails, E>
+  config: LoggerConfig<AdditionalDetails, E> & { eventIdHeader?: string }
 ) =>
   createMiddleware<E & { Variables: HonoLoggerVariables }>(async (c, next) => {
     const context: LoggerResolveContext<E> = {
@@ -146,6 +148,8 @@ export const logger = <
 
     c.set('logger', logger);
     c.set('eventId', logger.eventId);
+
+    c.header(config.eventIdHeader ?? 'x-event-id', logger.eventId);
 
     await next();
   });

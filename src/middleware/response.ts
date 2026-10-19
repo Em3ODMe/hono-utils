@@ -71,20 +71,15 @@ const setResponseHandlers = (c: Context) => {
  * Response Middleware
  * @description
  * Injects a `res` object into the Hono context (`c.var.res`).
- * This ensures all outgoing responses follow a consistent schema and include
- * tracing metadata (like `eventId`) automatically.
+ * This ensures all outgoing responses follow a consistent schema.
  * @example
  * ```ts
- * app.use('*', response());
+ * app.use('*', response);
  * ```
  */
-export const response = (options?: { eventIdHeader?: string }) =>
-  createMiddleware<{
-    Variables: HonoResponseVariables & HonoLoggerVariables;
-  }>(async (c, next) => {
-    c.set('res', setResponseHandlers(c));
-    if (c.var.eventId) {
-      c.header(options?.eventIdHeader ?? 'x-event-id', c.var.eventId);
-    }
-    await next();
-  });
+export const response = createMiddleware<{
+  Variables: HonoResponseVariables & HonoLoggerVariables;
+}>(async (c, next) => {
+  c.set('res', setResponseHandlers(c));
+  await next();
+});

@@ -11,7 +11,7 @@ type Env = {
 describe(response.name, () => {
   describe('raw method', () => {
     it('should success', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.raw({
           status: 400,
@@ -32,7 +32,7 @@ describe(response.name, () => {
     });
 
     it('should default to 200 when no status is provided', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.raw({ data: { test: 'test' } });
       });
@@ -46,7 +46,7 @@ describe(response.name, () => {
 
   describe('success method', () => {
     it('should success', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.success('ok');
       });
@@ -59,7 +59,7 @@ describe(response.name, () => {
       });
     });
     it('should success', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.success('ok', { test: 'test' });
       });
@@ -74,25 +74,8 @@ describe(response.name, () => {
         },
       });
     });
-    it('should success', async () => {
-      const app = createMiddlewareTester<Env>({ eventId: '123' }, response());
-      app.get('/test', async (c) => {
-        return c.var.res.success('ok', { test: 'test' });
-      });
-
-      const res = await app.request('/test');
-
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({
-        message: 'ok',
-        data: {
-          test: 'test',
-        },
-      });
-    });
-
     it('should use an explicit success status code', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.success('created', { test: 'test' }, 201);
       });
@@ -111,7 +94,7 @@ describe(response.name, () => {
 
   describe('successNoContent method', () => {
     it('should return the message with a default 200 status', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.successNoContent('done');
       });
@@ -123,7 +106,7 @@ describe(response.name, () => {
     });
 
     it('should return an empty body with a 204 status', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.successNoContent('done', 204);
       });
@@ -135,7 +118,7 @@ describe(response.name, () => {
     });
 
     it('should return an empty body with a 304 status', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.successNoContent('done', 304);
       });
@@ -149,7 +132,7 @@ describe(response.name, () => {
 
   describe('null-body statuses', () => {
     it('should return an empty body when success uses a 204 status', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.success('done', { test: 'test' }, 204);
       });
@@ -161,7 +144,7 @@ describe(response.name, () => {
     });
 
     it('should return an empty body when raw uses a 204 status', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.raw({ status: 204, data: { test: 'test' } });
       });
@@ -175,7 +158,7 @@ describe(response.name, () => {
 
   describe('error method', () => {
     it('should return a JSON body consistent with raw and success', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       app.get('/test', async (c) => {
         return c.var.res.error('failed', 400);
       });
@@ -184,83 +167,6 @@ describe(response.name, () => {
 
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ message: 'failed' });
-    });
-  });
-
-  describe('x-event-id header', () => {
-    it('should set the x-event-id header when eventId is present', async () => {
-      const app = createMiddlewareTester<Env>(
-        { eventId: 'event-123' },
-        response()
-      );
-      app.get('/test', async (c) => {
-        return c.var.res.success('ok', { test: 'test' });
-      });
-
-      const res = await app.request('/test');
-
-      expect(res.status).toBe(200);
-      expect(res.headers.get('x-event-id')).toBe('event-123');
-    });
-
-    it('should not set the x-event-id header when eventId is missing', async () => {
-      const app = createMiddlewareTester<Env>(undefined, response());
-      app.get('/test', async (c) => {
-        return c.var.res.success('ok', { test: 'test' });
-      });
-
-      const res = await app.request('/test');
-
-      expect(res.status).toBe(200);
-      expect(res.headers.get('x-event-id')).toBeNull();
-    });
-  });
-
-  describe('eventIdHeader option', () => {
-    it('should use a custom header name when eventIdHeader is provided', async () => {
-      const app = createMiddlewareTester<Env>(
-        { eventId: 'event-123' },
-        response({ eventIdHeader: 'x-request-id' })
-      );
-      app.get('/test', async (c) => {
-        return c.var.res.success('ok', { test: 'test' });
-      });
-
-      const res = await app.request('/test');
-
-      expect(res.status).toBe(200);
-      expect(res.headers.get('x-request-id')).toBe('event-123');
-      expect(res.headers.get('x-event-id')).toBeNull();
-    });
-
-    it('should default to x-event-id when eventIdHeader is not provided', async () => {
-      const app = createMiddlewareTester<Env>(
-        { eventId: 'event-123' },
-        response()
-      );
-      app.get('/test', async (c) => {
-        return c.var.res.success('ok', { test: 'test' });
-      });
-
-      const res = await app.request('/test');
-
-      expect(res.status).toBe(200);
-      expect(res.headers.get('x-event-id')).toBe('event-123');
-    });
-
-    it('should not set the custom header when eventId is missing', async () => {
-      const app = createMiddlewareTester<Env>(
-        undefined,
-        response({ eventIdHeader: 'x-request-id' })
-      );
-      app.get('/test', async (c) => {
-        return c.var.res.success('ok', { test: 'test' });
-      });
-
-      const res = await app.request('/test');
-
-      expect(res.status).toBe(200);
-      expect(res.headers.get('x-request-id')).toBeNull();
     });
   });
 
@@ -286,7 +192,7 @@ describe(response.name, () => {
       }
       vi.stubGlobal('Response', LenientResponse);
 
-      const app = createMiddlewareTester<Env>(undefined, response());
+      const app = createMiddlewareTester<Env>(undefined, response);
       const clientSocket = {} as WebSocket;
       const serverSocket = {} as WebSocket;
 

@@ -1,13 +1,12 @@
 # Response Middleware
 
-The `response` middleware provides a unified, type-safe API for sending consistent JSON responses from your **Hono** handlers. It ensures that every response—whether it's a success, an error, or raw data—follows a standard schema, and it propagates the tracing `eventId` as a response header.
+The `response` middleware provides a unified, type-safe API for sending consistent JSON responses from your **Hono** handlers. It ensures that every response—whether it's a success, an error, or raw data—follows a standard schema.
 
 ---
 
 ## Features
 
 - **Uniform Schema:** A consistent `{ message, data }` shape for successes and errors.
-- **Tracing Header:** Automatically sets a response header (default `x-event-id`, configurable via `eventIdHeader`) from the request's `eventId` (when the `logger` middleware is registered before it).
 - **Contentless Statuses:** Handles `204`/`205`/`304` by returning a null body instead of throwing.
 - **Exception-Driven Errors:** Uses Hono's `HTTPException` for errors, allowing them to be caught by global error handlers.
 - **WebSocket Support:** Includes a shorthand for protocol upgrade (101 Switching Protocols) responses.
@@ -19,7 +18,7 @@ The `response` middleware provides a unified, type-safe API for sending consiste
 
 ### 1. Initialization
 
-Register the middleware in your app. It is recommended to place this after the `logger` middleware so the `eventId` is available for the tracing header.
+Register the middleware in your app.
 
 ```typescript
 import { Hono } from 'hono';
@@ -27,13 +26,7 @@ import { response, type HonoResponseVariables } from 'hono-utils';
 
 const app = new Hono<{ Variables: HonoResponseVariables }>();
 
-app.use('*', response());
-```
-
-To override the tracing header name, pass the `eventIdHeader` option:
-
-```typescript
-app.use('*', response({ eventIdHeader: 'x-request-id' }));
+app.use('*', response);
 ```
 
 ### 2. Standard Success Responses
@@ -77,13 +70,9 @@ app.get('/protected', (c) => {
 
 ## API Reference
 
-### `response(options?)`
+### `response`
 
 Registers the middleware and injects the `res` helper into the context.
-
-| Option          | Type     | Default        | Description                                                       |
-| --------------- | -------- | -------------- | ----------------------------------------------------------------- |
-| `eventIdHeader` | `string` | `'x-event-id'` | The response header that carries the request's tracing `eventId`. |
 
 ### `c.var.res.success(message, data?, status?)`
 
@@ -152,9 +141,9 @@ The `success`, `successNoContent`, and `raw` helpers default to `200` unless a s
 
 ### Traceability
 
-When the `logger` middleware has run first (setting `eventId` on the context), the `response` middleware automatically adds a response header (default `x-event-id`, or the header configured via `eventIdHeader`) carrying that ID. Pass this ID back to your support team to correlate a client error with your logs.
+The [`logger`](logger.md) middleware returns the request `eventId` via the `x-event-id` response header by default (override it with its `eventIdHeader` option). The `response` middleware does not manage tracing headers.
 
 ---
 
 > [!TIP]
-> **Debugging:** If a user reports an error, ask them for the tracing header value (default `x-event-id`, or the header you configured via `eventIdHeader`). You can use this ID to find the exact logs for that specific request in your logging dashboard.
+> **Debugging:** If a user reports an error, ask them for the tracing header value (`x-event-id` by default, or the name configured via the [`logger`](logger.md) middleware's `eventIdHeader` option). You can use this ID to find the exact logs for that specific request in your logging dashboard.

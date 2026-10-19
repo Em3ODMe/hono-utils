@@ -4,6 +4,7 @@ import {
   clientInfo,
   type HonoClientInfoVariables,
 } from '@/middleware/clientInfo';
+import { logger, type HonoLoggerVariables } from '@/middleware/logger';
 import { createMiddlewareTester } from '../utils';
 
 type Env = {
@@ -122,6 +123,62 @@ describe(clientInfo.name, () => {
         securityHash: 'unset',
         userAgent:
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+      });
+    });
+  });
+
+  describe('with useLogger', () => {
+    type LoggedEnv = {
+      Bindings: Record<string, string>;
+      Variables: HonoClientInfoVariables & HonoLoggerVariables;
+    };
+
+    it('should log to the middleware:clientInfo area and still set client info', async () => {
+      const loggedApp = createMiddlewareTester<LoggedEnv>(
+        undefined,
+        logger({ details: { instance: 'clientInfo' } })
+      );
+
+      loggedApp.get(
+        '/test',
+        clientInfo({
+          hashSecretBinding: 'HASH_SECRET_BINDING',
+          useLogger: true,
+        }),
+        (c) => {
+          const area = c.var.logger.retrieveAreaEvents('middleware:clientInfo');
+          return c.json({
+            clientSet: !!c.var.client,
+            messages: area.map((entry) => entry.message),
+          });
+        }
+      );
+
+      const req = new Request('http://localhost/test', {
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+          'CF-Connecting-IP': '203.0.113.7',
+        },
+      });
+      Object.defineProperty(req, 'cf', {
+        value: { cf: {} },
+        writable: false,
+      });
+
+      const res = await loggedApp.fetch(req, { HASH_SECRET_BINDING: 'test' });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        clientSet: true,
+        messages: [
+          'Retrieving hash secret from environment',
+          'Forming cloudflare client data object',
+          'Parsing user agent',
+          'Getting ip address',
+          'Setting client data into context',
+          'Client data variable set',
+        ],
       });
     });
   });

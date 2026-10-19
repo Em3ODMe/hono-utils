@@ -1,10 +1,58 @@
 import { HTTPException } from 'hono/http-exception';
 import type { IncomingRequestCfPropertiesBotManagementBase } from '@cloudflare/workers-types';
 import { createMiddleware } from 'hono/factory';
+import type { Context } from 'hono';
 import { HonoLoggerVariables } from './logger';
+import { withLogger, type LoggerFunctions } from './withLogger';
 
 export type HonoIsBotVariables = {
   isBot: boolean;
+};
+
+type IsBotEnv = {
+  Variables: HonoIsBotVariables & HonoLoggerVariables;
+};
+
+/**
+ * Shared detection logic. `logger` is `undefined` when logging is disabled
+ * (`useLogger: false`), in which case every log call is a no-op.
+ */
+const detectBot = async (
+  c: Context<IsBotEnv>,
+  logger: LoggerFunctions | undefined,
+  threshold: number,
+  allowVerifiedBot: boolean | undefined
+): Promise<void> => {
+  logger?.debug('Retrieving bot management data from cloudflare data');
+  const botManagement = c.req.raw.cf?.botManagement as
+    IncomingRequestCfPropertiesBotManagementBase | undefined;
+
+  if (!botManagement) {
+    throw new Error('botManagement is not available');
+  }
+
+  const score = botManagement?.score ?? 54;
+  const verifiedBot = botManagement?.verifiedBot ?? false;
+
+  // Determine if this request should be treated as a bot based on score,
+  // allowing verified bots when configured.
+  const isBotByScore = score < threshold;
+  const isVerifiedAllowed = !!(allowVerifiedBot && verifiedBot);
+
+  logger?.debug('Setting isBot variable in context', {
+    isBotByScore,
+    isVerifiedAllowed,
+    isBot: isBotByScore,
+  });
+
+  logger?.info('isBot variable set');
+  c.set('isBot', isBotByScore);
+
+  // Block non-verified bots when score is below threshold, or when non-verified
+  // bots are not allowed by configuration.
+  if (isBotByScore && !isVerifiedAllowed) {
+    throw new HTTPException(401, { message: 'Bot detected' });
+  }
 };
 
 /**
@@ -16,6 +64,8 @@ export type HonoIsBotVariables = {
  * @param {boolean} [options.allowVerifiedBot] - If true, the middleware strictly requires
  * bots to be "verified" (e.g., Googlebot, Bingbot).
  * Note: If this is enabled, non-verified bots will be blocked regardless of their score.
+ * @param {boolean} [options.useLogger] - When true, the middleware logs through the request
+ * logger via `withLogger`. Requires the `logger` middleware to be registered first.
  * @returns {MiddlewareHandler} A Hono middleware handler.
  * @throws {HTTPException} Throws a 401 "Bot detected" error if the score is below the
  * threshold or if a non-verified bot is detected when `allowVerifiedBot` is true.
@@ -34,44 +84,15 @@ export const isBot = ({
   useLogger?: boolean;
   threshold?: number;
   allowVerifiedBot?: boolean;
-}) =>
-  createMiddleware<{
-    Variables: HonoIsBotVariables & HonoLoggerVariables;
-  }>(async (c, next) => {
-    const logger = useLogger
-      ? c.get('logger')?.getArea('middleware:isBot')
-      : undefined;
+}) => {
+  if (useLogger) {
+    return withLogger<IsBotEnv>('isBot', (c, logger) =>
+      detectBot(c, logger, threshold, allowVerifiedBot)
+    );
+  }
 
-    logger?.debug('Retrieving bot management data from cloudflare data');
-    const botManagement = c.req.raw.cf?.botManagement as
-      IncomingRequestCfPropertiesBotManagementBase | undefined;
-
-    if (!botManagement) {
-      throw new Error('botManagement is not available');
-    }
-
-    const score = botManagement?.score ?? 54;
-    const verifiedBot = botManagement?.verifiedBot ?? false;
-
-    // Determine if this request should be treated as a bot based on score,
-    // allowing verified bots when configured.
-    const isBotByScore = score < threshold;
-    const isVerifiedAllowed = !!(allowVerifiedBot && verifiedBot);
-
-    logger?.debug('Setting isBot variable in context', {
-      isBotByScore,
-      isVerifiedAllowed,
-      isBot: isBotByScore,
-    });
-
-    logger?.info('isBot variable set');
-    c.set('isBot', isBotByScore);
-
-    // Block non-verified bots when score is below threshold, or when non-verified
-    // bots are not allowed by configuration.
-    if (isBotByScore && !isVerifiedAllowed) {
-      throw new HTTPException(401, { message: 'Bot detected' });
-    }
-
+  return createMiddleware<IsBotEnv>(async (c, next) => {
+    await detectBot(c, undefined, threshold, allowVerifiedBot);
     await next();
   });
+};
