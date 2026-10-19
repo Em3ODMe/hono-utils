@@ -49,6 +49,12 @@ import { createTypedClient } from 'hono-utils/client';
 import { onError, onNotFound } from 'hono-utils';
 ```
 
+### Utils
+
+```ts
+import { formatZodError, getSecretValue } from 'hono-utils';
+```
+
 ## Detailed Documentation
 
 - Client
@@ -73,3 +79,7 @@ import { onError, onNotFound } from 'hono-utils';
 - Router
   - [onError](docs/router/onError.md)
   - [onNotFound](docs/router/onNotFound.md)
+
+- Utils
+  - [formatZodError](docs/utils/formatZodError.md)
+  - [getSecretValue](docs/utils/getSecretValue.md)

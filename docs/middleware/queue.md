@@ -1,6 +1,6 @@
 # Queue Producer Middleware
 
-The `queue` middleware facilitates type-safe communication between your **Hono** API and **Cloudflare Queues**. It dynamically injects a typed producer into the request context and optionally automates "finalize logging" by dumping the request's log state into the queue once the response is complete.
+The `queue` middleware facilitates type-safe communication between your **Hono** API and **Cloudflare Queues**. It dynamically injects a typed producer into the request context and optionally runs a `callOnFinalization` callback once the response is complete (e.g. to dump the request's log state into the queue).
 
 ---
 
@@ -8,7 +8,7 @@ The `queue` middleware facilitates type-safe communication between your **Hono**
 
 - **Context-Aware Injection:** Dynamically binds a queue producer to the Hono context using the binding name defined in your `wrangler.toml`.
 - **Type-Safe Messaging:** Leverages your existing [`QueueHandler`](../queue/QueueHandler.md) schema to provide autocompletion and validation when sending messages.
-- **Automatic Log Finalization:** If a `finalizeLogHandler` is specified, the middleware automatically "dumps" the current `Logger` state into the queue after the request finishes.
+- **Post-Response Finalization:** If a `callOnFinalization` callback is specified, the middleware invokes it once the request finishes, passing the queue producer together with the context's `get`/`env` helpers (e.g. to "dump" the current `Logger` state into the queue).
 - **Trace Propagation:** Automatically carries over `parentEventId` and `language` variables into queue messages to maintain distributed tracing and localization.
 
 ---
@@ -47,9 +47,9 @@ app.post('/process', async (c) => {
 });
 ```
 
-### 2. Automated Logging (Post-Processing)
+### 2. Post-Response Finalization
 
-By combining this with the `logger` middleware, you can offload log persistence to a background worker.
+By combining this with the `logger` middleware, you can offload log persistence to a background worker using the `callOnFinalization` callback. It runs after `next()` finishes and receives the queue producer together with the context's `get` and `env` helpers.
 
 ```typescript
 import { logger, queue } from 'hono-utils';
@@ -57,23 +57,23 @@ import { logger, queue } from 'hono-utils';
 // 1. Initialize Logger
 app.use('*', logger({ details: { instance: 'api' } }));
 
-// 2. Initialize Queue with log finalizer
+// 2. Initialize Queue with a finalization callback
 app.use(
   '*',
   queue({
     name: 'LOG_QUEUE',
     queueHandler: logQueueHandler,
-    finalizeLogHandler: 'persist_log', // The handler key in your schema
+    callOnFinalization: async (producer, { get }) => {
+      // 'persist_log' is the handler key in your schema
+      await producer('persist_log', get('logger').dump());
+    },
   })
 );
-
-// After next() finishes, the middleware automatically calls:
-// await producer('persist_log', logger.dump());
 ```
 
 ### 3. Finalizing Logs on Errors
 
-The automatic finalization above only runs when the request completes **successfully**. When a route throws, `next()` never returns, so the middleware does not dump the log — which is exactly when you usually need the error logs.
+The `callOnFinalization` callback above only runs when the request completes **successfully**. When a route throws, `next()` never returns, so the middleware does not run the callback — which is exactly when you usually need the error logs.
 
 Finalize failed requests from your `onError` handler instead. The producer and the logger are both still available on the context there, because the middleware injected them before the route ran:
 
@@ -99,11 +99,11 @@ app.onError(
 
 ### `queue(options)`
 
-| Option               | Type                | Description                                                                                                                                                                                                       |
-| -------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`               | `string` (Optional) | The environment binding name for the Queue (e.g., `'MY_QUEUE'`). When omitted, the single Queue binding available in the environment is auto-detected. Required when the environment has multiple Queue bindings. |
-| `queueHandler`       | `QueueHandler`      | An instance of the `QueueHandler` class defining your message schema.                                                                                                                                             |
-| `finalizeLogHandler` | `string` (Optional) | The key in your schema used for auto-logging the request state.                                                                                                                                                   |
+| Option               | Type                                              | Description                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`               | `string` (Optional)                               | The environment binding name for the Queue (e.g., `'MY_QUEUE'`). When omitted, the single Queue binding available in the environment is auto-detected. Required when the environment has multiple Queue bindings. |
+| `queueHandler`       | `QueueHandler`                                    | An instance of the `QueueHandler` class defining your message schema.                                                                                                                                             |
+| `callOnFinalization` | `(producer, context) => Promise<void>` (Optional) | Callback invoked after the request completes. Receives the queue producer and `{ get, env }` so you can send a final message and read context variables (logger, ...) and bindings.                               |
 
 ---
 
@@ -112,7 +112,7 @@ app.onError(
 ### Dependency Requirements
 
 - **Environment Binding:** When `name` is provided, it must exist in your `env` as a Cloudflare Queue binding. When omitted, the middleware auto-detects the single Queue binding in the environment and throws if none or more than one is found.
-- **Middleware Order:** If using `finalizeLogHandler`, the `logger` middleware **must** be registered before the `queue` middleware so that a logger instance is available in the context.
+- **Middleware Order:** To read the `logger` inside `callOnFinalization`, the `logger` middleware **must** be registered before the `queue` middleware so that a logger instance is available in the context.
 
 ### Message Metadata
 
@@ -128,9 +128,9 @@ Every message sent via the producer generated by this middleware automatically i
 1. **Setup:** The middleware retrieves the Queue binding and the current `language`/`logger` from the context.
 2. **Injection:** It creates a producer using `queueHandler.getProducer` and saves it to the Hono context under the provided `name`.
 3. **Next:** The request moves to the next middleware or route handler.
-4. **Finalization:** Once the response is ready and the stack "unwinds," the middleware checks for `finalizeLogHandler`. If it exists, it calls `logger.dump()` and pushes that data to the queue. This only happens when the request completes successfully — see [Finalizing Logs on Errors](#3-finalizing-logs-on-errors) for the failure path.
+4. **Finalization:** Once the response is ready and the stack "unwinds," the middleware invokes the `callOnFinalization` callback (if provided), passing the queue producer and the context's `get` and `env` helpers. This only happens when the request completes successfully — see [Finalizing Logs on Errors](#3-finalizing-logs-on-errors) for the failure path.
 
 ---
 
 > [!NOTE]
-> The `finalizeLogHandler` is executed using `await`. If your queue is experiencing heavy backpressure or latency, this may slightly delay the final response settlement of the worker, though it occurs after the business logic has finished.
+> The `callOnFinalization` callback is executed using `await`. If your queue is experiencing heavy backpressure or latency, this may slightly delay the final response settlement of the worker, though it occurs after the business logic has finished.

@@ -1,11 +1,11 @@
 import { createMiddleware } from 'hono/factory';
-import z, { type ZodObject } from 'zod';
+import type { ZodObject } from 'zod';
 import type { Queue } from '@cloudflare/workers-types';
 import { QueueHandler } from '../queue/QueueHandler';
 import { HonoLoggerVariables } from './logger';
 
 /** Keys of the worker environment whose value is a Queue binding. */
-type QueueBindingKeys<Environment> = {
+type QueueBindingKeys<Environment extends Record<string, unknown>> = {
   [K in keyof Environment & string]: Environment[K] extends Queue ? K : never;
 }[keyof Environment & string];
 
@@ -51,17 +51,52 @@ const resolveQueueBinding = (
   return { key, queue: queue as Queue };
 };
 
+/** Bindings exposed to the queue middleware and its finalization callback. */
+type QueueMiddlewareBindings<Environment extends Record<string, unknown>> =
+  Environment & Record<string, Queue>;
+
+/** Variables set by the queue middleware on the Hono context. */
+type QueueMiddlewareVariables<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Schema extends ZodObject<any>,
+  Environment extends Record<string, unknown>,
+  Context,
+> = HonoLoggerVariables &
+  Record<
+    string,
+    ReturnType<QueueHandler<Schema, Environment, Context>['getProducer']>
+  >;
+
+/**
+ * Context passed to the `callOnFinalization` callback once the request has
+ * completed. `get` reads context variables (producer, logger, event ID, ...)
+ * and `env` exposes the environment bindings (including the queue bindings).
+ */
+export type QueueFinalizationContext<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Schema extends ZodObject<any>,
+  Environment extends Record<string, unknown>,
+  Context,
+> = {
+  get: <K extends keyof QueueMiddlewareVariables<Schema, Environment, Context>>(
+    key: K
+  ) => QueueMiddlewareVariables<Schema, Environment, Context>[K];
+  env: QueueMiddlewareBindings<Environment>;
+};
+
 /**
  * Middleware to initialize a Queue producer and attach it to the Hono context.
  * @description
- * This middleware manages Cloudflare Queue interactions. If `finalizeLogHandler` is provided,
- * it will automatically capture the current logger state and send it to the queue after
- * the request is processed (post-`next()`).
+ * This middleware manages Cloudflare Queue interactions. If `callOnFinalization` is
+ * provided, it is invoked after the request has been processed (post-`next()`),
+ * receiving the queue producer and the Hono context's `get` and `env` helpers.
  * @param [options.name] - The name of the Queue binding defined in your `wrangler.toml`.
  * Optional: when omitted, the single Queue binding available in the environment is
  * auto-detected. Required when the environment has multiple Queue bindings.
  * @param options.queueHandler - An instance of your custom QueueHandler.
- * @param [options.finalizeLogHandler] - Optional: The specific message type/key to use when finalizing the log.
+ * @param [options.callOnFinalization] - Optional: A callback invoked after the request is
+ * processed. It receives the queue producer and `{ get, env }` so it can send a final
+ * message and read context variables (e.g. the logger) and the environment bindings.
  * @example
  * ```ts
  * // OPTIONAL
@@ -70,37 +105,38 @@ const resolveQueueBinding = (
  *  parentEventIdHeader: 'parent-event-id',
  * }));
  *
- * // The binding name is inferred from the environment
  * app.use('*', queue({
  *  queueHandler: new QueueHandler(),
- *  finalizeLogHandler: 'log'
+ *  callOnFinalization: async (producer, { get }) => {
+ *    await producer('log', get('logger').dump());
+ *  },
  * }));
  * ```
  */
 export const queue = <
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Schema extends ZodObject<any>,
-  Environment,
+  Environment extends Record<string, unknown>,
   Context,
-  Key extends keyof z.infer<Schema>,
 >({
   name,
   queueHandler,
-  finalizeLogHandler,
+  callOnFinalization,
 }: {
   name?: QueueBindingKeys<Environment> | (string & {});
   queueHandler: QueueHandler<Schema, Environment, Context>;
-  finalizeLogHandler?: Key;
+  callOnFinalization?: (
+    queueProducer: ReturnType<
+      QueueHandler<Schema, Environment, Context>['getProducer']
+    >,
+    context: QueueFinalizationContext<Schema, Environment, Context>
+  ) => Promise<void>;
 }) =>
   createMiddleware<{
-    Bindings: Record<string, Queue>;
-    Variables: HonoLoggerVariables &
-      Record<
-        string,
-        ReturnType<QueueHandler<Schema, Environment, Context>['getProducer']>
-      >;
+    Bindings: QueueMiddlewareBindings<Environment>;
+    Variables: QueueMiddlewareVariables<Schema, Environment, Context>;
   }>(async ({ env, set, get }, next) => {
-    const resolved = resolveQueueBinding(env as Record<string, unknown>, name);
+    const resolved = resolveQueueBinding(env, name);
 
     if (!resolved) {
       throw new Error(
@@ -118,10 +154,7 @@ export const queue = <
 
     let parentEventId: string | undefined;
 
-    if (finalizeLogHandler) {
-      if (!logger) {
-        throw new Error('Logger should be initialized before queue middleware');
-      }
+    if (logger) {
       parentEventId = logger?.eventId;
     }
 
@@ -133,10 +166,7 @@ export const queue = <
 
     await next();
 
-    if (finalizeLogHandler) {
-      await producer(
-        finalizeLogHandler,
-        logger!.dump() as z.infer<Schema>[Key]
-      );
+    if (callOnFinalization) {
+      await callOnFinalization(producer, { get, env });
     }
   });

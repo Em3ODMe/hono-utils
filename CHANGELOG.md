@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-10-19
+
+### Added
+
+- **`getSecretValue` utility** (`src/utils/getSecretValue.ts`). Resolves a secret supplied as a plain string or as a Cloudflare Secrets Store binding to its plain-string value, and is exported from `hono-utils` via the `utils` entry point.
+- **Utility documentation.** Added docs for `getSecretValue` and `formatZodError` (`docs/utils/`) and a new "Utils" section in the README.
+
+### Changed
+
+- **`queue` middleware finalization.** The `finalizeLogHandler` option was replaced by `callOnFinalization`, a callback invoked after the request completes (post-`next()`). It receives the queue producer and `{ get, env }`, giving callers control over the final message. The middleware's `Environment` generic is now constrained to `Record<string, unknown>` and is included in `Bindings` alongside the queue bindings, and `parentEventId` is propagated to the producer whenever a logger is present.
+
 ## [0.7.0] - 2026-10-15
 
 ### Added
@@ -36,4 +47,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`@paralleldrive/cuid2` dependency.** Event IDs are now generated via the configurable `createEventId` (defaulting to `crypto.randomUUID()`).
 - **`MiddlewaredWithLoggingCapability` fallback loggers.** The "dummy" logger fallbacks in `clientInfo` and `isBot` were removed in favor of the real request logger.
 
+[0.7.1]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.1
 [0.7.0]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.0

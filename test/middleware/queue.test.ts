@@ -18,7 +18,7 @@ const queueHandler = {
     setContext: vi.fn(),
   },
   addHandler: vi.fn(),
-} as unknown as QueueHandler<any, unknown, unknown>; // eslint-disable-line @typescript-eslint/no-explicit-any
+} as unknown as QueueHandler<any, Record<string, unknown>, unknown>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 type Env = {
   Bindings: { QUEUE: Queue };
@@ -52,7 +52,7 @@ describe(queue.name, () => {
   });
 
   describe('Should fail', () => {
-    it('validate', async () => {
+    it('throws when the named queue binding is missing', async () => {
       const app = createMiddlewareTester<Env>(
         undefined,
         queue({
@@ -69,29 +69,6 @@ describe(queue.name, () => {
         {},
         {
           QUEUE: undefined,
-        }
-      );
-      expect(res.status).toBe(500);
-    });
-
-    it('validate', async () => {
-      const app = createMiddlewareTester<Env>(
-        undefined,
-        queue({
-          name: 'QUEUE',
-          queueHandler,
-          finalizeLogHandler: 'log',
-        })
-      );
-
-      app.get('/index', async (c) => {
-        return c.text('ok');
-      });
-      const res = await app.request(
-        '/index',
-        {},
-        {
-          QUEUE: vi.fn(),
         }
       );
       expect(res.status).toBe(500);
@@ -219,37 +196,6 @@ describe(queue.name, () => {
       expect(res.status).toBe(200);
     });
 
-    it('validate', async () => {
-      const app = createMiddlewareTester<Env>(
-        {
-          logger: createLogger({
-            details: {
-              instance: 'test',
-              service: 'test',
-            },
-            eventId: 'test-event-id',
-          }),
-        },
-        queue({
-          name: 'QUEUE',
-          queueHandler,
-          finalizeLogHandler: 'log',
-        })
-      );
-
-      app.get('/index', async (c) => {
-        return c.text('ok');
-      });
-      const res = await app.request(
-        '/index',
-        {},
-        {
-          QUEUE: vi.fn(),
-        }
-      );
-      expect(res.status).toBe(200);
-    });
-
     it('passes parentEventId and language from the context to the producer', async () => {
       const app = createMiddlewareTester<Env>(
         {
@@ -265,7 +211,6 @@ describe(queue.name, () => {
         queue({
           name: 'QUEUE',
           queueHandler,
-          finalizeLogHandler: 'log',
         })
       );
 
@@ -287,7 +232,42 @@ describe(queue.name, () => {
       });
     });
 
-    it('sends the logger dump to the finalize log handler after the response', async () => {
+    it('invokes callOnFinalization after the response with the producer and context', async () => {
+      const onFinalization = vi.fn();
+      const app = createMiddlewareTester<Env>(
+        undefined,
+        queue({
+          name: 'QUEUE',
+          queueHandler,
+          callOnFinalization: async (producer, context) => {
+            onFinalization(producer, context);
+          },
+        })
+      );
+
+      app.get('/index', async (c) => {
+        return c.text('ok');
+      });
+      const res = await app.request(
+        '/index',
+        {},
+        {
+          QUEUE: vi.fn(),
+        }
+      );
+
+      expect(res.status).toBe(200);
+      expect(onFinalization).toHaveBeenCalledTimes(1);
+      expect(onFinalization).toHaveBeenCalledWith(
+        handler,
+        expect.objectContaining({
+          get: expect.any(Function),
+          env: expect.objectContaining({ QUEUE: expect.any(Function) }),
+        })
+      );
+    });
+
+    it('sends the logger dump through the producer when callOnFinalization is used', async () => {
       const app = createMiddlewareTester<Env>(
         {
           logger: createLogger({
@@ -301,7 +281,9 @@ describe(queue.name, () => {
         queue({
           name: 'QUEUE',
           queueHandler,
-          finalizeLogHandler: 'log',
+          callOnFinalization: async (producer, { get }) => {
+            await producer('log', get('logger').dump());
+          },
         })
       );
 
@@ -337,7 +319,6 @@ describe(queue.name, () => {
         queue({
           name: 'QUEUE',
           queueHandler,
-          finalizeLogHandler: 'log',
         })
       );
 
