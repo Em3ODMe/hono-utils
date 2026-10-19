@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-10-19
+
+### Fixed
+
+- **`QueueHandler` TypeScript instantiation blow-up on large Zod schemas.** The class was generic over the raw `ZodObject`, so every method signature re-derived `z.infer<Schema>` / `keyof z.infer<Schema>` over the concrete schema, causing pathological compile times and out-of-memory errors during `.d.ts` generation in consuming packages. `QueueHandler` is now generic over the schema's **inferred output type** instead; the raw schema instance is kept at runtime only, and the checker no longer instantiates zod's inference machinery inside the class.
+
+### Changed
+
+- **`QueueHandler`'s first type parameter now takes the schema's output type.** Explicit instantiation changes from `QueueHandler<typeof Schema, Environment, Context>` to `QueueHandler<z.infer<typeof Schema>, Environment, Context>`. Constructor inference (`new QueueHandler({ schema, setContext, createEventId })`) and all method signatures (`addHandler`, `getConsumer`, `getProducer`) are unchanged, and runtime behavior is identical. The `queue` middleware and `QueueFinalizationContext` follow the same output-generic convention.
+- **`zod` is now a peer dependency.** Since consumers pass their own Zod schemas into `jsonValidator`/`queryValidator` and Zod errors into `formatZodError`, zod must resolve to a single shared instance; it moved from `dependencies` to `peerDependencies` (`^4.0.0`) to prevent type mismatches from duplicate copies.
+
 ## [0.7.2] - 2026-10-19
 
 ### Added
@@ -64,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`@paralleldrive/cuid2` dependency.** Event IDs are now generated via the configurable `createEventId` (defaulting to `crypto.randomUUID()`).
 - **`MiddlewaredWithLoggingCapability` fallback loggers.** The "dummy" logger fallbacks in `clientInfo` and `isBot` were removed in favor of the real request logger.
 
+[0.7.3]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.3
 [0.7.2]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.2
 [0.7.1]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.1
 [0.7.0]: https://github.com/Em3ODMe/hono-utils/releases/tag/0.7.0

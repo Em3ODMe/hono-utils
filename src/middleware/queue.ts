@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory';
-import type { ZodObject } from 'zod';
 import type { Queue } from '@cloudflare/workers-types';
 import { QueueHandler } from '../queue/QueueHandler';
+import type { DataShape } from '../queue/types';
 import { HonoLoggerVariables } from './logger';
 
 /** Keys of the worker environment whose value is a Queue binding. */
@@ -57,8 +57,7 @@ type QueueMiddlewareBindings<Environment extends Record<string, unknown>> =
 
 /** Variables set by the queue middleware on the Hono context. */
 type QueueMiddlewareVariables<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Schema extends ZodObject<any>,
+  Schema extends DataShape,
   Environment extends Record<string, unknown>,
   Context,
 > = HonoLoggerVariables &
@@ -73,8 +72,7 @@ type QueueMiddlewareVariables<
  * and `env` exposes the environment bindings (including the queue bindings).
  */
 export type QueueFinalizationContext<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Schema extends ZodObject<any>,
+  Schema extends DataShape,
   Environment extends Record<string, unknown>,
   Context,
 > = {
@@ -114,8 +112,7 @@ export type QueueFinalizationContext<
  * ```
  */
 export const queue = <
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Schema extends ZodObject<any>,
+  Schema extends DataShape,
   Environment extends Record<string, unknown>,
   Context,
 >({

@@ -35,12 +35,13 @@ const schema = z.object({
 });
 
 type Schema = typeof schema;
+type SchemaData = z.infer<Schema>;
 type Environment = { NAME: string };
 type Context = { source: string; envMarker: string };
 type QueueData = GenericQueueData<z.infer<Schema>>;
 type Handlers = MessageHandlers<z.infer<Schema>, Context>;
 
-let qh: QueueHandler<Schema, Environment, Context>;
+let qh: QueueHandler<SchemaData, Environment, Context>;
 let env: Environment;
 
 const setContext: ContextFn<Environment, Context> = (
@@ -74,7 +75,7 @@ const createMockBatch = (messages: QueueData[], attempts: number[] = []) => {
 
 describe('QueueHandler (Vitest)', () => {
   beforeEach(() => {
-    qh = new QueueHandler<Schema, Environment, Context>({
+    qh = new QueueHandler<SchemaData, Environment, Context>({
       schema,
       setContext,
       createEventId,
@@ -139,7 +140,7 @@ describe('QueueHandler (Vitest)', () => {
       // Regression: the consumer must await setContext — an async factory
       // previously leaked a Promise into `{ ...context }`, yielding {} and
       // crashing handlers on `context.<field>` access.
-      const asyncQh = new QueueHandler<Schema, Environment, Context>({
+      const asyncQh = new QueueHandler<SchemaData, Environment, Context>({
         schema,
         setContext: async (_env, _params) => ({
           source: 'async-ctx',
@@ -251,7 +252,7 @@ describe('QueueHandler (Vitest)', () => {
     });
 
     it('retries a message when setContext rejects', async () => {
-      const failingQh = new QueueHandler<Schema, Environment, Context>({
+      const failingQh = new QueueHandler<SchemaData, Environment, Context>({
         schema,
         setContext: async () => {
           throw new Error('Context setup failed');
@@ -436,7 +437,7 @@ describe('QueueHandler (Vitest)', () => {
 
   describe('retry backoff', () => {
     it('uses the constructor baseRetryDelaySeconds with exponential backoff', async () => {
-      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+      const backoffQh = new QueueHandler<SchemaData, Environment, Context>({
         schema,
         setContext,
         createEventId,
@@ -459,7 +460,7 @@ describe('QueueHandler (Vitest)', () => {
     });
 
     it('lets a handler override the base with its own retryDelaySeconds', async () => {
-      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+      const backoffQh = new QueueHandler<SchemaData, Environment, Context>({
         schema,
         setContext,
         createEventId,
@@ -495,7 +496,7 @@ describe('QueueHandler (Vitest)', () => {
     });
 
     it('clamps the delay to the Cloudflare maximum', async () => {
-      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+      const backoffQh = new QueueHandler<SchemaData, Environment, Context>({
         schema,
         setContext,
         createEventId,
@@ -519,7 +520,7 @@ describe('QueueHandler (Vitest)', () => {
     });
 
     it('applies backoff to parse-failure retries and batch group retries', async () => {
-      const backoffQh = new QueueHandler<Schema, Environment, Context>({
+      const backoffQh = new QueueHandler<SchemaData, Environment, Context>({
         schema,
         setContext,
         createEventId,
