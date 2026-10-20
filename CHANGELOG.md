@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-10-20
+
+### Added
+
+- **`hono-utils` OpenCode skill** (`.agents/skills/hono-utils/`). An agent-facing `SKILL.md` plus a consolidated knowledge base (`reference.md`) covering the full public API, shipped with the npm package via the `files` field so consuming projects can register it from `node_modules` (see the README's "AI Agents / OpenCode Skill" section).
+- **Documentation for `HMAC` and `queryValidator`.** Both were exported but had no docs; they are now covered in the consolidated knowledge base (`HMAC.sha256Hex`, `HMAC.timingSafeEqualHex`, `HMAC.toHex`, and the `queryValidator` middleware).
+
+### Changed
+
+- **Documentation consolidated into a single knowledge base.** The 16 per-module pages under `docs/` were merged into `.agents/skills/hono-utils/reference.md`, organized by area (Client, Crypto, Middleware, Queue, Router, Utils) with cross-cutting middleware-order and tracing notes. README links and the contributing guide now point at the consolidated file.
+
+### Removed
+
+- **Per-module `docs/` pages.** Replaced by the consolidated knowledge base (`.agents/skills/hono-utils/reference.md`).
+
 ## [0.7.3] - 2026-10-19
 
 ### Fixed

@@ -57,30 +57,51 @@ import { formatZodError, getSecretValue } from 'hono-utils';
 
 ## Detailed Documentation
 
+All modules are documented in one consolidated knowledge base:
+[`.agents/skills/hono-utils/reference.md`](.agents/skills/hono-utils/reference.md)
+
 - Client
-  - [createTypedClient](docs/client/createTypedClient.md)
+  - [createTypedClient](.agents/skills/hono-utils/reference.md#createtypedclient)
 
 - Crypto
-  - [pbkdf2](docs/crypto/pbkdf2.md)
-  - [sha](docs/crypto/sha.md)
+  - [HMAC](.agents/skills/hono-utils/reference.md#hmac)
+  - [pbkdf2](.agents/skills/hono-utils/reference.md#pbkdf2)
+  - [sha](.agents/skills/hono-utils/reference.md#sha)
 
 - Middleware
-  - [clientInfo](docs/middleware/clientInfo.md)
-  - [i18n](docs/middleware/i18n.md)
-  - [isBot](docs/middleware/isBot.md)
-  - [jsonValidator](docs/middleware/jsonValidator.md)
-  - [logger](docs/middleware/logger.md)
-  - [queue](docs/middleware/queue.md)
-  - [response](docs/middleware/response.md)
-  - [withLogger](docs/middleware/withLogger.md)
+  - [clientInfo](.agents/skills/hono-utils/reference.md#clientinfo)
+  - [i18n](.agents/skills/hono-utils/reference.md#i18n)
+  - [isBot](.agents/skills/hono-utils/reference.md#isbot)
+  - [jsonValidator](.agents/skills/hono-utils/reference.md#jsonvalidator)
+  - [logger](.agents/skills/hono-utils/reference.md#logger)
+  - [queryValidator](.agents/skills/hono-utils/reference.md#queryvalidator)
+  - [queue](.agents/skills/hono-utils/reference.md#queue-middleware)
+  - [response](.agents/skills/hono-utils/reference.md#response)
+  - [withLogger](.agents/skills/hono-utils/reference.md#withlogger)
 
 - Queue
-  - [QueueHandler](docs/queue/QueueHandler.md)
+  - [QueueHandler](.agents/skills/hono-utils/reference.md#queuehandler)
 
 - Router
-  - [onError](docs/router/onError.md)
-  - [onNotFound](docs/router/onNotFound.md)
+  - [onError](.agents/skills/hono-utils/reference.md#onerror)
+  - [onNotFound](.agents/skills/hono-utils/reference.md#onnotfound)
 
 - Utils
-  - [formatZodError](docs/utils/formatZodError.md)
-  - [getSecretValue](docs/utils/getSecretValue.md)
+  - [formatZodError](.agents/skills/hono-utils/reference.md#formatzoderror)
+  - [getSecretValue](.agents/skills/hono-utils/reference.md#getsecretvalue)
+
+## AI Agents / OpenCode Skill
+
+`hono-utils` ships an OpenCode skill — a consolidated knowledge base for AI
+agents — at `.agents/skills/hono-utils/` inside the installed package. To make
+it available to agents in a consuming project, register it as a skill source:
+
+```jsonc
+// opencode.jsonc
+{
+  "skills": ["./node_modules/hono-utils/.agents/skills"],
+}
+```
+
+The skill registers as `hono-utils`; its `reference.md` contains the full API
+documentation linked above.

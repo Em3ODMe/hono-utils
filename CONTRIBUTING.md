@@ -79,7 +79,8 @@ npm run coverage
 If you add a new feature (like a new middleware or router helper), please update:
 
 1. The `README.md` usage section.
-2. The relevant documentation file in the `docs/` directory.
+2. The relevant section of the consolidated knowledge base at
+   `.agents/skills/hono-utils/reference.md`.
 
 ---
 

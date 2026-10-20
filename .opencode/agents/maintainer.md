@@ -34,14 +34,16 @@ bugs, keep documentation and tests in sync, and keep the toolchain green.
 | Middleware (`clientInfo`, `i18n`, `isBot`, `jsonValidator`, `logger`, `queryValidator`, `queue`, `response`) | `src/index.ts`      |
 | Queue (`QueueHandler`)                                                                                       | `src/index.ts`      |
 | Router (`onError`, `onNotFound`)                                                                             | `src/index.ts`      |
-| Utils (`formatZodError`)                                                                                     | `src/index.ts`      |
+| Utils (`formatZodError`, `getSecretValue`)                                                                   | `src/index.ts`      |
 | Crypto (`HMAC`, `PBKDF2`, `SHA`)                                                                             | `hono-utils/crypto` |
 | Client (`createTypedClient`)                                                                                 | `hono-utils/client` |
 
 # Repository layout
 
 - `src/<area>/` — implementation; `test/<area>/` — Vitest tests mirroring the
-  same structure; `docs/<area>/` — one Markdown doc per exported utility.
+  same structure. Public API documentation lives in a single consolidated
+  knowledge base: `.agents/skills/hono-utils/reference.md`, loaded by the
+  `hono-utils` skill.
 - Public entry points are defined in `build.config.ts` **and** `package.json`
   `exports`. When adding or removing a submodule entry point, update both.
 - `@` path alias resolves to `src/` (see `tsconfig.json` / `vitest.config.ts`).
@@ -55,9 +57,13 @@ bugs, keep documentation and tests in sync, and keep the toolchain green.
   exactly.
 - **Tests**: every new utility requires a corresponding `test/**/*.test.ts`
   file. Vitest runs with `globals: true` and node environment; use
-  `app.request(...)`-style tests per `AGENT.md`. Strive for high coverage.
-- **Docs**: every new feature needs a `docs/` page and a README usage entry.
-  Update both in the same change.
+  `app.request(...)`-style tests per the `hono` skill. Strive for high
+  coverage.
+- **Docs**: every new feature needs a section in the consolidated knowledge
+  base (`.agents/skills/hono-utils/reference.md`) and a README usage entry.
+  Update both in the same change. The knowledge base and its `SKILL.md` ship
+  with the npm package (`package.json` `files`), so keep them in sync with
+  the public API.
 - **Git**: work on descriptive branches (`feat/...`, `fix/...`), not `main`.
   Version commits follow the pattern `0.7.0`, `0.6.1`, `0.6.0`, ... (see git log).
 
